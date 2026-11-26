@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readdirSync, readFileSync } from 'node:fs';
-import { createExpense, localDay } from './ledger.mjs';
+import { createExpense, localDay, monthlyTotals } from './ledger.mjs';
 import { bookAccess } from './pro-access.mjs';
-import { bookSettlement, budgetProgress, budgetRemaining, missingRecurring, recurringID } from './pro-ledger.mjs';
+import { bookExpenses, bookSettlement, budgetProgress, budgetRemaining, changeExpense, missingRecurring, recurringID } from './pro-ledger.mjs';
 import { latestEdits, ownedBookPlan } from './shared-book.mjs';
 
 const january = Date.UTC(2026, 0, 1);
@@ -68,6 +68,56 @@ const settings = source('FutariKakeibo/BookSettings.swift');
 function cloudMethod(name) {
   return cloud.match(new RegExp(`func ${name}\\([\\s\\S]*?\\n {4}\\}`))?.[0] ?? '';
 }
+
+test('editing and deleting one expense ID recomputes totals and settlement even with late photo copies', () => {
+  const original = expense('lunch', 600, february, 'dining');
+  const other = expense('groceries', 200, february, 'groceries', 'second');
+  const base = book({ expenses: [original, { ...original }, other] });
+  const replacement = expense(original.id, 1_200, february, 'groceries');
+  const edited = changeExpense(base, original.id, replacement);
+  const editedWithLateCopy = { ...edited, expenses: [original, ...edited.expenses] };
+  assert.deepEqual(bookExpenses(editedWithLateCopy), [replacement, other]);
+  assert.deepEqual(monthlyTotals(bookExpenses(editedWithLateCopy), february), { groceries: 1_400 });
+  assert.deepEqual(bookSettlement(editedWithLateCopy, dates), { from: 'second', to: 'first', amount: 500 });
+
+  const deleted = changeExpense(edited, original.id);
+  assert.deepEqual(deleted.expenses, [other]);
+  const deletedWithLateCopy = { ...deleted, expenses: [original, ...deleted.expenses] };
+  assert.deepEqual(bookExpenses(deletedWithLateCopy), [other]);
+  assert.deepEqual(monthlyTotals(bookExpenses(deletedWithLateCopy), february), { groceries: 200 });
+  assert.deepEqual(bookSettlement(deletedWithLateCopy, dates), { from: 'first', to: 'second', amount: 100 });
+});
+
+test('a settled source or destination month prevents expense changes', () => {
+  const original = expense('lunch', 600, february, 'dining');
+  const closed = book({ expenses: [original], settled: [february] });
+  assert.throws(() => changeExpense(closed, original.id, { ...original, date: march }), /settled/);
+  assert.throws(() => changeExpense(closed, original.id), /settled/);
+  const open = book({ expenses: [original], settled: [march] });
+  assert.throws(() => changeExpense(open, original.id, { ...original, date: march }), /settled/);
+});
+
+test('a deleted recurring occurrence stays deleted without stopping the template', () => {
+  const base = book({ templates: [expense(rentID, 100, january, 'housing')] });
+  const [generated] = missingRecurring(base, february);
+  const deleted = changeExpense({ ...base, expenses: [generated] }, generated.id);
+  assert.deepEqual(missingRecurring(deleted, february), []);
+  assert.equal(missingRecurring(deleted, march).length, 1);
+});
+
+test('the app wires expense edits and confirmed deletions to the protected repository writes', () => {
+  const detail = source('FutariKakeibo/ExpenseDetail.swift');
+  const app = source('FutariKakeibo/FutariKakeiboApp.swift');
+  assert.match(detail, /Button\("編集"\)[\s\S]*?EntryForm\(snapshot: snapshot, repository: ledger, editing: original\)/);
+  assert.match(detail, /Button\("この支出を削除"[\s\S]*?\.confirmationDialog\("この支出を削除しますか？"[\s\S]*?try ledger\.delete\(expense\.id, from: book, matching: expense\)/);
+  assert.match(app, /\.swipeActions\(allowsFullSwipe: false\)[\s\S]*?\.confirmationDialog\("この支出を削除しますか？"[\s\S]*?try ledger\.delete\(expense\.id, from: book, matching: expense\)/);
+  assert.match(app, /Expense\(id: original\?\.id \?\? UUID\(\)[\s\S]*?repository\.update\(expense, replacing: original, in: snapshot\.book\)/);
+  assert.match(cloudMethod('update'), /try receiptRows[\s\S]*?editableExpenseFields[\s\S]*?requireUnchanged[\s\S]*?monthKey\(Month\(containing: expense\.date\)\)[\s\S]*?throw BookError\.settled[\s\S]*?canUpdateRecord[\s\S]*?insertEdit\(key,/);
+  assert.match(cloudMethod('delete'), /try receiptRows[\s\S]*?editableExpenseFields[\s\S]*?requireUnchanged[\s\S]*?copies\.allSatisfy[\s\S]*?canDeleteRecord[\s\S]*?insertEdit\(deletedExpenseKey\(expenseID\)[\s\S]*?for copy in copies \{ context\.delete\(copy\) \}/);
+  assert.match(cloudMethod('editableExpenseFields'), /currentExpenseFields[\s\S]*?monthKey\(Month\(containing: fields\.date\)\)[\s\S]*?throw BookError\.settled/);
+  assert.match(cloudMethod('expenses'), /edits\[deletedExpenseKey\(fields\.id\)\] == nil, ids\.insert\(fields\.id\)\.inserted[\s\S]*?currentExpenseFields\(fields/);
+  assert.match(cloudMethod('generateRecurring'), /guard values\[deletedExpenseKey\(expense\.id\)\] == nil/);
+});
 
 test('a stop or settlement imported after launch prevents generation in its own store', () => {
   const rent = expense(rentID, 101, january, 'housing');
@@ -334,31 +384,39 @@ test('home leads with the selected Japan month settlement in its largest font', 
   const home = app.slice(app.indexOf('private struct Home: View'), app.indexOf('struct FirstExpensePrompt: View'));
   const header = home.slice(home.indexOf('private func settlementHeader'), home.indexOf('private func settlementTitle'));
   assert.match(home, /let currentMonth = Month\(containing: ScreenshotDemo\.day \?\? Month\.localDay\(context\.date\)\)\s*let month = selectedMonth \?\? currentMonth/);
-  assert.match(home, /List \{\s*if let snapshot = ledger\.snapshot \{\s*if snapshot\.expenses\.isEmpty && snapshot\.settlementDates\[month\] == nil \{\s*FirstExpensePrompt\([^\n]+\)\s*\} else \{\s*settlementHeader\(month: month, currentMonth: currentMonth, snapshot: snapshot\)/);
+  assert.match(home, /List \{\s*if let snapshot = ledger\.snapshot \{\s*if snapshot\.expenses\.isEmpty && snapshot\.settlementDates\[month\] == nil \{\s*FirstExpensePrompt\([^\n]+\)[\s\S]*?\} else \{\s*settlementHeader\(month: month, currentMonth: currentMonth, snapshot: snapshot\)/);
   assert.match(header, /return layout \{\s*NavigationLink \{[\s\S]*?\} label: \{\s*VStack\([^\n]+\) \{\s*Text\(settlementTitle\(in: month, snapshot: snapshot\)\)\s*\.font\(\.largeTitle\.weight\(\.bold\)\)/);
   const styles = Array.from(home.matchAll(/\.font\(\.(\w+)/g), ([, style]) => style);
   assert.equal(styles.filter(style => style === 'largeTitle').length, 1);
   assert.ok(styles.every(style => ['largeTitle', 'headline', 'subheadline', 'footnote'].includes(style)));
   assert.equal((home.match(/\.font\(/g) ?? []).length, styles.length);
   assert.match(header, /Menu \{\s*Button\("前の月"\) \{ selectedMonth = month\.advanced\(by: -1\) \}\s*Button\("次の月"\) \{ selectedMonth = month\.advanced\(by: 1\) \}/);
-  assert.match(home, /let direction = payment\.from == member \? "相手に" : "相手から"/);
+  const title = home.slice(home.indexOf('private func settlementTitle'));
+  assert.match(title, /return payment\.from == member\s*\? ".*支払う"\s*: ".*受け取る"/);
   assert.match(home, /case \.open\(nil\)\?: return "精算なし"/);
+  assert.match(home, /HomeSpending\(month: month, snapshot: snapshot\)/);
+  assert.match(home, /let totals = try\? Ledger\.totals\(for: snapshot\.expenses, in: month\)[\s\S]*?SectorMark\(angle: \.value\("支出", totals\[category, default: 0\]\)/);
   assert.match(home, /Ledger\.spendingTotal\(for: snapshot\.expenses, in: month\)[\s\S]*?value: total\.yen/);
+  assert.match(home, /let expense = recentExpense\(in: month, snapshot: snapshot\)[\s\S]*?Text\(expense\.label \?\? snapshot\.title\(for: expense\.category\)\)/);
+  assert.match(home, /func recentExpense[\s\S]*?month\.dates\.contains\(\$0\.date\)[\s\S]*?return partnerExpense\s*\}\s*return records\.first/);
   assert.match(cloudMethod('write'), /try context\.save\(\)[\s\S]*?refresh\(\)/);
 });
 
-test('home and budget lead an empty book to the first expense form', () => {
+test('an empty book can open either the first expense form or the Pro budget settings', () => {
   const app = source('FutariKakeibo/FutariKakeiboApp.swift');
   const budget = source('FutariKakeibo/ProSettings.swift');
   const prompt = app.slice(app.indexOf('struct FirstExpensePrompt: View'), app.indexOf('private enum MonthlySettlement'));
   assert.match(app, /if snapshot\.expenses\.isEmpty && snapshot\.settlementDates\[month\] == nil \{\s*FirstExpensePrompt\(canRecord: ledger\.canStartRecording, record: startExpense\)/);
-  assert.match(budget, /if snapshot\.expenses\.isEmpty \{\s*FirstExpensePrompt\(canRecord: ledger\.canStartRecording, record: startExpense\)\s*\} else \{\s*budgetRows\(snapshot\)/);
+  assert.match(app, /FirstExpensePrompt\([^\n]+\)\s*if ledger\.plan\.allowsProFeatures \{\s*NavigationLink \{\s*BudgetSettings\(ledger: ledger, book: snapshot\.book, month: month\)/);
+  const budgetSettings = budget.slice(budget.indexOf('struct BudgetSettings'), budget.indexOf('struct BudgetProgressRow'));
+  assert.match(budgetSettings, /snapshot\.book == book \{\s*budgetRows\(snapshot\)/);
+  assert.doesNotMatch(budgetSettings, /expenses\.isEmpty/);
+  assert.match(budgetSettings, /if limits\.isEmpty, !previousLimits\.isEmpty \{\s*Button\("前月の予算を引き継ぐ"\) \{\s*do \{ try ledger\.copyPreviousBudget/);
+  assert.match(cloudMethod('copyPreviousBudget'), /try write\(to: book\)[\s\S]*?limitsByMonth\[month\.advanced\(by: -1\)\][\s\S]*?guard !previous\.isEmpty,[\s\S]*?\(limitsByMonth\[month\][\s\S]*?for \(category, limit\) in previous[\s\S]*?insertEdit\(key, value: String\(limit\)/);
   assert.match(prompt, /Text\("この家計簿にはまだ支出の記録がありません。"\)\s*RecordExpenseButton/);
   assert.match(prompt, /Button\(action: record\) \{\s*Label\("支出を記録", systemImage: "plus"\)[\s\S]*?\.buttonStyle\(\.borderedProminent\)/);
-  for (const view of [app, budget]) {
-    assert.match(view, /\.sheet\(item: \$enteringExpense\) \{ snapshot in\s*EntryForm\(snapshot: snapshot, repository: ledger\)/);
-    assert.match(view, /func startExpense\(\)[\s\S]*?try ledger\.startRecording\(\)/);
-  }
+  assert.match(app, /\.sheet\(item: \$enteringExpense\) \{ snapshot in\s*EntryForm\(snapshot: snapshot, repository: ledger\)/);
+  assert.match(app, /func startExpense\(\)[\s\S]*?try ledger\.startRecording\(\)/);
   assert.match(cloudMethod('member'), /isOwner: !book\.isGuest/);
   assert.match(source('FutariKakeibo/BookRepository.swift'), /if isOwner \{ return \.first \}/);
 });
@@ -374,40 +432,48 @@ test('home gets the settlement date from the latest closed-month edit', () => {
 
 test('budget progress covers under, exactly at, over, refunds and zero budget', () => {
   for (const [limit, spent, remaining, overspend, percentageUsed, progress, displayPercentage] of [
-    [2000, 1500, 500, 0, 75, 0.75, 75],
-    [2000, 2000, 0, 0, 100, 1, 100],
+    [2000, 1500, 500, 0, 75, 0.75, 25],
+    [2000, 2000, 0, 0, 100, 1, 0],
     [2000, 2500, 0, 500, 125, 1, -25],
     [2000, 2001, 0, 1, 100.05, 1, -1],
-    [2000, -100, 2100, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0],
+    [2000, -100, 2100, 0, 0, 0, 105],
+    [0, 0, 0, 0, 0, 0, null],
     [0, 500, 0, 500, null, 1, null],
   ]) {
     assert.deepEqual(budgetProgress(limit, spent), {
-      limit, remaining, overspend, percentageUsed, progress, displayPercentage,
+      limit, spent, remaining, overspend, percentageUsed, progress, displayPercentage,
     });
   }
+  const remaining = budgetProgress(218_000, 180_244);
+  assert.deepEqual([remaining.spent, remaining.remaining, remaining.displayPercentage], [180_244, 37_756, 17]);
+  const over = budgetProgress(40_000, 81_098);
+  assert.deepEqual([over.spent, over.overspend, over.displayPercentage], [81_098, 41_098, -103]);
 });
 
 test('Swift puts the configured budget total above categories and shows accessible overspend', () => {
   const ledger = source('FutariDomain/Ledger.swift');
   const budget = source('FutariKakeibo/ProSettings.swift');
   assert.match(ledger, /func budgetProgress\(limit: Int, spent: Int\) -> BudgetProgress/);
+  assert.match(ledger, /let displayPercentage = limit > 0 \? \(100 \* Double\(balance\) \/ Double\(limit\)\)\.rounded\(\.down\) : nil/);
+  assert.match(ledger, /BudgetProgress\(limit: limit, spent: spent/);
   assert.match(ledger, /return budgetProgress\(limit: limit, spent: spent\)/);
   assert.match(ledger, /limits\.keys\.reduce\(0\) \{ try sum\(\$0, totals\[\$1, default: 0\]\) \}/);
   assert.match(budget, /Ledger\.budgetTotal\(limits: limits, totals: totals\)[\s\S]*?BudgetProgressRow\(title: "予算の合計", progress: total\)[\s\S]*?ForEach\(categories/);
   assert.match(budget, /Ledger\.budgetProgress\(limit: limit, spent: totals\[category, default: 0\]\)/);
   assert.match(budget, /Text\(progress\.overspend > 0 \? "超過 \\\(progress\.overspend\.yen\)" : "残り \\\(progress\.remaining\.yen\)"\)/);
   assert.match(budget, /ProgressView\(value: progress\.progress\)/);
+  assert.match(budget, /"予算 \\\(progress\.limit\.yen\)"/);
+  assert.match(budget, /"支払済 \\\(progress\.spent\.yen\)"/);
   assert.match(budget, /Text\(progress\.displayPercentage\.map[\s\S]*?\.foregroundStyle\(tone\)/);
 
   const colors = [...budget.matchAll(/Color\(red: ([\d.]+)(?: \/ (255))?, green: ([\d.]+) \/ 255, blue: ([\d.]+) \/ 255\)/g)];
-  assert.equal(colors.length, 2);
+  assert.equal(colors.length, 4);
   const luminance = rgb => rgb.map(channel => channel <= 0.04045
     ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
     .reduce((sum, linear, index) => sum + linear * [0.2126, 0.7152, 0.0722][index], 0);
   for (const [index, [, red, divisor, green, blue]] of colors.entries()) {
     const foreground = luminance([red / (divisor ?? 1), green / 255, blue / 255]);
-    const background = luminance(index === 0 ? [0.2, 0.2, 0.2] : [0.9, 0.9, 0.9]);
+    const background = luminance(index % 2 === 0 ? [0.2, 0.2, 0.2] : [0.9, 0.9, 0.9]);
     assert.ok((Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05) >= 4.5);
   }
 });
@@ -430,7 +496,7 @@ test('the first entry uses a focused amount and two defaulted pickers before opt
   const app = source('FutariKakeibo/FutariKakeiboApp.swift');
   assert.match(app, /enteringExpense = try ledger\.startRecording\(\)/);
   assert.match(app, /category = Category\.groceries/);
-  assert.match(app, /_payer = State\(initialValue: snapshot\.member \?\? \.first\)/);
+  assert.match(app, /_payer = State\(initialValue: expense\?\.payer \?\? snapshot\.member \?\? \.first\)/);
   assert.match(app, /TextField\("金額（円）"[\s\S]*?Picker\("支払った人"[\s\S]*?Picker\("費目"[\s\S]*?DisclosureGroup\(isRecurring[\s\S]*?defaultFocus\(\$amountFocused, true\)/);
 });
 
@@ -548,7 +614,8 @@ test('free settings offer an opt-in local recording reminder and can cancel it',
 
 test('home links the other member’s latest dated payment or refund to its synced expense', () => {
   const app = source('FutariKakeibo/FutariKakeiboApp.swift');
-  assert.match(app, /let expense = snapshot\.expenses\.first\(where: \{\s*\$0\.payer == member\.other && month\.dates\.contains\(\$0\.date\)\s*\}\)[\s\S]*?ExpenseDetail\(ledger: ledger, book: snapshot\.book, expenseID: expense\.id\)[\s\S]*?expense\.payerCaption\(names: snapshot\.names\)/);
+  assert.match(app, /let expense = recentExpense\(in: month, snapshot: snapshot\)[\s\S]*?ExpenseDetail\(ledger: ledger, book: snapshot\.book, expenseID: expense\.id\)[\s\S]*?expense\.payerCaption\(names: snapshot\.names\)/);
+  assert.match(app, /let records = snapshot\.expenses\.filter \{ month\.dates\.contains\(\$0\.date\) \}[\s\S]*?records\.first\(where: \{ \$0\.payer == member\.other \}\)/);
   assert.match(cloudMethod('expenses'), /\.sorted \{ \$0\.date > \$1\.date \}/);
 });
 

@@ -165,3 +165,18 @@
 - **機械検証できる合格条件**:
   - Node テストで、メンバー別支払合計・負担額の純粋関数が立替相殺と一致すること、および `PaidBookTools.swift` のカスタムテーマ色の白文字に対する相対輝度コントラスト比が 4.5:1 以上であることを計算検証すること。
   - Node ソースチェックで `ProSettings.swift` の `ProLock` にアクセシビリティ属性があり、`MonthDetail` の月送り行に `isAccessibilitySize` 分岐があること。
+
+## 対応
+
+| 改善 | 対応 |
+| --- | --- |
+| 1. 支出の編集・削除 | **直した**（`Sources/FutariKakeibo/ExpenseDetail.swift:54`、`Sources/FutariKakeibo/FutariKakeiboApp.swift:479`、`Sources/FutariKakeibo/CloudLedger.swift:1130`、`Sources/FutariKakeibo/CloudLedger.swift:1154`）。精算済みの月を保護し、支出の削除時に写真も削除する。検証は `checks/pro-ledger.test.mjs:72`。 |
+| 2. 予算 | **直した**（`Sources/FutariDomain/Ledger.swift:153`、`Sources/FutariKakeibo/ProSettings.swift:56`、`Sources/FutariKakeibo/ProSettings.swift:127`、`Sources/FutariKakeibo/CloudLedger.swift:819`）。支払済額と残り割合を表示し、支出ゼロでも設定できる。未設定の月は前月の予算を引き継げる。検証は `checks/pro-ledger.test.mjs:405` と `checks/pro-ledger.test.mjs:433`。 |
+| 3. ホーム | **直した**（`Sources/FutariKakeibo/FutariKakeiboApp.swift:183`、`Sources/FutariKakeibo/FutariKakeiboApp.swift:232`、`Sources/FutariKakeibo/FutariKakeiboApp.swift:248`）。精算の方向を動詞で示し、自分だけの支出も表示する。支出合計を開くと費目別の金額を金額順で表示し、円グラフも確認できる。マイナスの費目がある月やアクセシビリティ文字サイズでは一覧で表示する。検証は `checks/pro-ledger.test.mjs:382`。 |
+| 4. ウィジェット・通知・招待 | **次回**。無料時の表示と入力画面への遷移、通知時刻、招待導線をまとめて扱う。 |
+| 5. 初回取込中の記録 | **見送り**（取込前の仮記録から既存の個人・共有家計簿へ移す際のデータ保全を、複数のiCloudアカウントと端末で確認する必要がある。WindowsのNodeチェックで確認できるのは統合規則まで）。 |
+| 6. 購入画面 | **次回**。正式価格は未確定。無料体験の表示はStoreKitで対象資格を確かめる。 |
+| 7. ストア公開準備 | **見送り**（本番の識別子・URLと採用アイコンが未確定。アセットの組込とストア画像の撮影にはXcodeが必要）。 |
+| 8. アクセシビリティ・精算内訳 | **次回**。VoiceOverと最大文字サイズはiOSで確認する。 |
+
+WindowsでNodeの純粋関数テストとソースチェックを実施。iOSビルド、実画面、CloudKitの実機同期は未確認。

@@ -11,10 +11,8 @@ export function budgetProgress(limit, spent) {
   const used = Math.max(0, spent);
   const percentageUsed = limit > 0 ? 100 * used / limit : (used === 0 ? 0 : null);
   const progress = Math.min(1, (percentageUsed ?? 100) / 100);
-  const displayPercentage = overspend > 0 && limit > 0
-    ? -Math.ceil(100 * overspend / limit)
-    : percentageUsed === null ? null : Math.floor(percentageUsed);
-  return { limit, remaining: Math.max(0, balance), overspend, percentageUsed, progress, displayPercentage };
+  const displayPercentage = limit > 0 ? Math.floor(100 * balance / limit) : null;
+  return { limit, spent, remaining: Math.max(0, balance), overspend, percentageUsed, progress, displayPercentage };
 }
 
 export function recurringID(bookID, templateID, month) {
@@ -31,7 +29,7 @@ export function missingRecurring(book, month, sync) {
       && (sync.account !== 'available' || !sync.importedStores.has(sync.store))) return [];
   const start = monthStart(month);
   if (book.settled.has(start)) return [];
-  const seen = new Set(book.expenses.map(({ id }) => id));
+  const seen = new Set([...book.expenses.map(({ id }) => id), ...(book.deletedExpenses ?? [])]);
   const missing = [];
   for (const template of book.templates) {
     if (monthStart(template.date) > start) continue;
@@ -43,13 +41,32 @@ export function missingRecurring(book, month, sync) {
   return missing;
 }
 
-function bookExpenses(book) {
+export function bookExpenses(book) {
   const seen = new Set();
-  return book.expenses.filter(({ id }) => {
-    if (seen.has(id)) return false;
+  return book.expenses.flatMap(expense => {
+    const { id } = expense;
+    if (seen.has(id) || book.deletedExpenses?.has(id)) return [];
     seen.add(id);
-    return true;
+    return [book.expenseEdits?.get(id) ?? expense];
   });
+}
+
+// Mirror the repository's stable-ID edits and deletion markers.
+export function changeExpense(book, id, replacement) {
+  const current = bookExpenses(book).find(expense => expense.id === id);
+  if (!current || (replacement && replacement.id !== id)) throw new Error('expense changed');
+  if (book.settled.has(monthStart(current.date))
+      || (replacement && book.settled.has(monthStart(replacement.date)))) throw new Error('settled');
+  if (replacement) {
+    const expenseEdits = new Map(book.expenseEdits);
+    expenseEdits.set(id, { id, ...createExpense(replacement) });
+    return { ...book, expenseEdits };
+  }
+  return {
+    ...book,
+    expenses: book.expenses.filter(expense => expense.id !== id),
+    deletedExpenses: new Set([...(book.deletedExpenses ?? []), id]),
+  };
 }
 
 export function bookSettlement(book, dates) {

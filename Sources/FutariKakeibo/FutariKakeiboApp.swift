@@ -1,4 +1,5 @@
 import Foundation
+import Charts
 import FutariDomain
 import SwiftUI
 import CloudKit
@@ -79,6 +80,13 @@ private struct Home: View {
                     if let snapshot = ledger.snapshot {
                         if snapshot.expenses.isEmpty && snapshot.settlementDates[month] == nil {
                             FirstExpensePrompt(canRecord: ledger.canStartRecording, record: startExpense)
+                            if ledger.plan.allowsProFeatures {
+                                NavigationLink {
+                                    BudgetSettings(ledger: ledger, book: snapshot.book, month: month)
+                                } label: {
+                                    Text("費目別予算を設定").frame(minHeight: 44)
+                                }
+                            }
                         } else {
                             settlementHeader(month: month, currentMonth: currentMonth, snapshot: snapshot)
                         }
@@ -102,11 +110,6 @@ private struct Home: View {
                         Text(partnerNotice).font(.footnote).foregroundStyle(.secondary)
                     }
                     if let snapshot = ledger.snapshot, !snapshot.expenses.isEmpty {
-                        if let total = try? Ledger.spendingTotal(for: snapshot.expenses, in: month) {
-                            YenRow(title: month == currentMonth ? "今月の支出合計" : "支出合計", value: total.yen)
-                        } else {
-                            Text("合計を表示できません").foregroundStyle(.secondary)
-                        }
                         let previous = month.advanced(by: -1)
                         if month == currentMonth, snapshot.settlementDates[previous] == nil,
                            snapshot.expenses.contains(where: { previous.dates.contains($0.date) }) {
@@ -128,20 +131,22 @@ private struct Home: View {
                         Text("自分の支払いを記録すると、ふたりの家計簿に反映されます")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
-                    if let snapshot = ledger.snapshot, let member = snapshot.member,
-                       let expense = snapshot.expenses.first(where: {
-                           $0.payer == member.other && month.dates.contains($0.date)
-                       }) {
+                    if let snapshot = ledger.snapshot,
+                       let expense = recentExpense(in: month, snapshot: snapshot) {
                         NavigationLink {
                             ExpenseDetail(ledger: ledger, book: snapshot.book, expenseID: expense.id)
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
+                                Text(expense.label ?? snapshot.title(for: expense.category))
                                 Text(expense.payerCaption(names: snapshot.names))
                                 Text(expense.amount.yen).font(.headline).monospacedDigit()
                             }
                             .frame(minHeight: 44)
                             .accessibilityElement(children: .combine)
                         }
+                    }
+                    if let snapshot = ledger.snapshot, !snapshot.expenses.isEmpty {
+                        HomeSpending(month: month, snapshot: snapshot)
                     }
                 }
                 .onChange(of: currentMonth) { _, _ in ledger.refresh() }
@@ -173,6 +178,14 @@ private struct Home: View {
     private func startExpense() {
         do { enteringExpense = try ledger.startRecording() }
         catch { entryUnavailable = true }
+    }
+
+    private func recentExpense(in month: Month, snapshot: LedgerSnapshot) -> Expense? {
+        let records = snapshot.expenses.filter { month.dates.contains($0.date) }
+        if let member = snapshot.member, let partnerExpense = records.first(where: { $0.payer == member.other }) {
+            return partnerExpense
+        }
+        return records.first
     }
 
     private func settlementHeader(month: Month, currentMonth: Month, snapshot: LedgerSnapshot) -> some View {
@@ -224,9 +237,67 @@ private struct Home: View {
             guard let member = snapshot.member else {
                 return "\(snapshot.names[payment.from])から\(snapshot.names[payment.to])へ \(payment.amount.yen)"
             }
-            let direction = payment.from == member ? "相手に" : "相手から"
-            return "\(direction) \(payment.amount.yen)"
+            return payment.from == member
+                ? "\(snapshot.names[payment.to])へ \(payment.amount.yen) 支払う"
+                : "\(snapshot.names[payment.from])から \(payment.amount.yen) 受け取る"
         case nil: return "精算額を表示できません"
+        }
+    }
+}
+
+private struct HomeSpending: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let month: Month
+    let snapshot: LedgerSnapshot
+
+    var body: some View {
+        if let total = try? Ledger.spendingTotal(for: snapshot.expenses, in: month),
+           let totals = try? Ledger.totals(for: snapshot.expenses, in: month) {
+            let categories = totals.keys.sorted {
+                let left = totals[$0, default: 0]
+                let right = totals[$1, default: 0]
+                return left == right ? $0.rawValue < $1.rawValue : left > right
+            }
+            if categories.isEmpty {
+                YenRow(title: "支出合計", value: total.yen)
+            } else {
+                breakdown(categories: categories, totals: totals, total: total)
+            }
+        } else {
+            Text("合計を表示できません").foregroundStyle(.secondary)
+        }
+    }
+
+    private func breakdown(categories: [Category], totals: [Category: Int], total: Int) -> some View {
+        let positive = categories.filter { totals[$0, default: 0] > 0 }
+        return DisclosureGroup {
+            if !typeSize.isAccessibilitySize, !positive.isEmpty, totals.values.allSatisfy({ $0 >= 0 }) {
+                ZStack {
+                    Chart(positive, id: \.self) { category in
+                        SectorMark(angle: .value("支出", totals[category, default: 0]), innerRadius: .ratio(0.72))
+                            .foregroundStyle(by: .value("費目", category.rawValue))
+                            .accessibilityLabel(Text(snapshot.title(for: category)))
+                            .accessibilityValue(Text(totals[category, default: 0].yen))
+                    }
+                    .chartLegend(.hidden)
+                    Text("支出合計\n\(total.yen)")
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: 122)
+                        .accessibilityHidden(true)
+                }
+                .frame(height: 184)
+            }
+            ForEach(categories, id: \.self) { category in
+                YenRow(title: snapshot.title(for: category), value: totals[category, default: 0].yen)
+            }
+        } label: {
+            YenRow(title: "支出合計", value: total.yen)
+                .frame(minHeight: 44)
+                .accessibilityHint("費目別の内訳を表示します")
         }
     }
 }
@@ -304,6 +375,9 @@ private struct MonthDetail: View {
     let book: Book
     @State private var showingSettlement = false
     @State private var showingEntry = false
+    @State private var pendingDeletion: Expense?
+    @State private var confirmDeletion = false
+    @State private var deletionFailure: String?
 
     init(month: Month, ledger: CloudLedger, book: Book) {
         _month = State(initialValue: month)
@@ -402,6 +476,17 @@ private struct MonthDetail: View {
                         .accessibilityElement(children: .combine)
                         .frame(minHeight: 44)
                     }
+                    .swipeActions(allowsFullSwipe: false) {
+                        if !isSettled, snapshot.member != nil, !ledger.shareBusy {
+                            Button {
+                                pendingDeletion = expense
+                                confirmDeletion = true
+                            } label: {
+                                Label("削除", systemImage: "trash")
+                            }
+                            .tint(.red)
+                        }
+                    }
                 }
             }
         }
@@ -414,6 +499,24 @@ private struct MonthDetail: View {
             let today = Month.localDay(.now)
             EntryForm(snapshot: snapshot, repository: ledger,
                       initialDate: month.dates.contains(today) ? today : month.start)
+        }
+        .confirmationDialog("この支出を削除しますか？", isPresented: $confirmDeletion,
+                            titleVisibility: .visible, presenting: pendingDeletion) { expense in
+            Button("削除", role: .destructive) {
+                do { try ledger.delete(expense.id, from: book, matching: expense) }
+                catch BookError.settled { deletionFailure = "月の明細で精算済みを解除してください。" }
+                catch { deletionFailure = "支出を削除できませんでした。明細を確認してください。" }
+            }
+        } message: { expense in
+            Text("\(expense.label ?? snapshot.title(for: expense.category)) \(expense.amount.yen)とレシート写真を削除します。")
+        }
+        .alert("支出の削除", isPresented: Binding(
+            get: { deletionFailure != nil },
+            set: { if !$0 { deletionFailure = nil } }
+        )) {
+            Button("閉じる", role: .cancel) {}
+        } message: {
+            Text(deletionFailure ?? "")
         }
     }
 
@@ -499,6 +602,7 @@ struct EntryForm: View {
     let snapshot: LedgerSnapshot
     let repository: any BookRepository
     let isRecurring: Bool
+    private let original: Expense?
     private var names: Names { snapshot.names }
     @State private var amount = ""
     @State private var date: Date
@@ -514,12 +618,28 @@ struct EntryForm: View {
     @State private var failure = ""
 
     init(snapshot: LedgerSnapshot, repository: any BookRepository, isRecurring: Bool = false,
-         initialDate: Date = ScreenshotDemo.day ?? Month.localDay(.now)) {
+         initialDate: Date = ScreenshotDemo.day ?? Month.localDay(.now), editing expense: Expense? = nil) {
         self.snapshot = snapshot
         self.repository = repository
         self.isRecurring = isRecurring
-        _payer = State(initialValue: snapshot.member ?? .first)
-        _date = State(initialValue: initialDate)
+        original = expense
+        _payer = State(initialValue: expense?.payer ?? snapshot.member ?? .first)
+        _date = State(initialValue: expense?.date ?? initialDate)
+        _amount = State(initialValue: expense.map { String(abs($0.amount)) } ?? "")
+        _category = State(initialValue: expense?.category ?? .groceries)
+        _label = State(initialValue: expense?.label ?? "")
+        _refund = State(initialValue: (expense?.amount ?? 0) < 0)
+        switch expense?.split ?? .equal {
+        case .equal:
+            break
+        case let .ratio(first, second):
+            _mode = State(initialValue: .ratio)
+            _first = State(initialValue: String(first))
+            _second = State(initialValue: String(second))
+        case let .fixed(firstYen):
+            _mode = State(initialValue: .fixed)
+            _fixedAmount = State(initialValue: String(firstYen))
+        }
     }
 
     private enum Mode: String, CaseIterable {
@@ -566,7 +686,7 @@ struct EntryForm: View {
                 }
             }
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(isRecurring ? "定期入力を追加" : "支出を記録")
+            .navigationTitle(original != nil ? "支出を編集" : (isRecurring ? "定期入力を追加" : "支出を記録"))
             .navigationBarTitleDisplayMode(.inline)
             .defaultFocus($amountFocused, true)
             .toolbar {
@@ -594,16 +714,20 @@ struct EntryForm: View {
         do {
             let day = isRecurring ? Month.localDay(.now) : Month.calendar.startOfDay(for: date)
             guard let yen = Int(amount), yen > 0 else { throw LedgerError.invalidAmount }
-            let expense = try Expense(amount: refund ? -yen : yen, date: day,
+            let expense = try Expense(id: original?.id ?? UUID(), amount: refund ? -yen : yen, date: day,
                                       category: category, payer: payer, split: split, label: label)
-            if isRecurring {
+            if let original {
+                try repository.update(expense, replacing: original, in: snapshot.book)
+            } else if isRecurring {
                 try repository.addTemplate(expense, to: snapshot.book)
             } else {
                 try repository.add(expense, to: snapshot.book)
             }
             dismiss()
         } catch BookError.settled {
-            failure = "月の明細で精算済みを解除すると、この日付に記録できます。"
+            failure = "月の明細で精算済みを解除してから保存してください。"
+        } catch BookError.expenseChanged {
+            failure = "支出が変更されました。編集画面を閉じ、最新の明細を確認してください。"
         } catch LedgerError.invalidAmount {
             failure = "金額を1円以上の整数で入力してください。"
         } catch LedgerError.invalidRatio {

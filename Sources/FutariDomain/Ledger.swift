@@ -71,7 +71,7 @@ public enum SplitRule: Equatable {
     }
 }
 
-public struct Expense: Identifiable {
+public struct Expense: Identifiable, Equatable {
     public let id: UUID
     public let amount: Int
     public let date: Date
@@ -141,6 +141,7 @@ public struct Settlement: Equatable {
 
 public struct BudgetProgress {
     public let limit: Int
+    public let spent: Int
     public let remaining: Int
     public let overspend: Int
     public let percentageUsed: Double?
@@ -155,10 +156,8 @@ public enum Ledger {
         let used = Double(max(0, spent))
         let percentageUsed: Double? = limit > 0 ? 100 * used / Double(limit) : (used == 0 ? 0 : nil)
         let progress = min(1, (percentageUsed ?? 100) / 100)
-        let displayPercentage = overspend > 0 && limit > 0
-            ? -(100 * Double(overspend) / Double(limit)).rounded(.up)
-            : percentageUsed?.rounded(.down)
-        return BudgetProgress(limit: limit, remaining: max(0, balance), overspend: overspend,
+        let displayPercentage = limit > 0 ? (100 * Double(balance) / Double(limit)).rounded(.down) : nil
+        return BudgetProgress(limit: limit, spent: spent, remaining: max(0, balance), overspend: overspend,
                               percentageUsed: percentageUsed, progress: progress,
                               displayPercentage: displayPercentage)
     }

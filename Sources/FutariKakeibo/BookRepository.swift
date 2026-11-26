@@ -40,13 +40,14 @@ struct LedgerSnapshot: Identifiable {
 protocol BookRepository {
     var snapshot: LedgerSnapshot? { get }
     func add(_ expense: Expense, to book: Book) throws
+    func update(_ expense: Expense, replacing original: Expense, in book: Book) throws
     func addTemplate(_ template: Expense, to book: Book) throws
     func setSettled(_ settled: Bool, month: Month, in book: Book) throws
     func rename(_ names: Names, replacing previous: Names, in book: Book) throws
 }
 
 enum BookError: Error {
-    case unavailable, settled, otherPartner, unresolvedPartner, missingLink, proRequired
+    case unavailable, settled, expenseChanged, otherPartner, unresolvedPartner, missingLink, proRequired
 }
 
 extension Member {

@@ -641,7 +641,8 @@ final class CloudLedger: ObservableObject, BookRepository {
                 settlementDates[month] = max(date, settlementDates[month] ?? .distantPast)
             }
             let custom = plan.allowsProFeatures ? customCategories(from: edits) : [:]
-            let expenses = try self.expenses(in: row, context: context, registeredCategories: Set(custom.keys))
+            let expenses = try self.expenses(in: row, context: context, edits: edits,
+                                             registeredCategories: Set(custom.keys))
             snapshot = LedgerSnapshot(book: book, member: member, names: names,
                                       expenses: expenses, settlementDates: settlementDates,
                                       budgets: plan.allowsProFeatures ? budgets(from: edits) : [:],
@@ -748,6 +749,7 @@ final class CloudLedger: ObservableObject, BookRepository {
                 let ids = candidates.map(\.id)
                 let existing = Set(try context.fetch(expenseRequest(in: row, recurringIDs: ids)).compactMap(\.recurringID))
                 for expense in candidates where !existing.contains(expense.id) {
+                    guard values[deletedExpenseKey(expense.id)] == nil else { continue }
                     try insert(expense, in: row, store: store, context: context, recurring: true)
                 }
                 if context.hasChanges { try context.save() }
@@ -807,8 +809,29 @@ final class CloudLedger: ObservableObject, BookRepository {
 
     func setBudget(_ limit: Int?, category: Category, month: Month, in book: Book) throws {
         if let limit, !(1...Ledger.maximumYen).contains(limit) { throw LedgerError.invalidAmount }
-        let budgetField = "budget/\(Int(month.start.timeIntervalSince1970))/\(category.rawValue)"
-        try writeProEdit(budgetField, value: limit.map { String($0) } ?? "", in: book)
+        try writeProEdit(budgetKey(category, month: month), value: limit.map { String($0) } ?? "", in: book)
+    }
+
+    private func budgetKey(_ category: Category, month: Month) -> String {
+        "budget/\(Int(month.start.timeIntervalSince1970))/\(category.rawValue)"
+    }
+
+    func copyPreviousBudget(to month: Month, in book: Book) throws {
+        guard plan.allowsProFeatures else { throw BookError.proRequired }
+        try write(to: book) { row, store, context in
+            let edits = try latestEdits(in: row, context: context)
+            let limitsByMonth = budgets(from: edits)
+            let categories = Set(Category.allCases + Array(customCategories(from: edits).keys))
+            let previous = (limitsByMonth[month.advanced(by: -1)] ?? [:]).filter { categories.contains($0.key) }
+            guard !previous.isEmpty,
+                  (limitsByMonth[month] ?? [:]).keys.allSatisfy({ !categories.contains($0) })
+            else { throw BookError.unavailable }
+            for (category, limit) in previous {
+                let key = budgetKey(category, month: month)
+                insertEdit(key, value: String(limit), in: row, store: store,
+                           context: context, after: edits[key]?.time)
+            }
+        }
     }
 
     func addTemplate(_ template: Expense, to book: Book) throws {
@@ -892,7 +915,8 @@ final class CloudLedger: ObservableObject, BookRepository {
 
         // Keep the solo ledger intact. The guest's first slot is the shared book's second slot.
         let destinationCategories = customCategories(from: edits)
-        let sourceCategories = customCategories(from: try latestEdits(in: source, context: context))
+        let sourceEdits = try latestEdits(in: source, context: context)
+        let sourceCategories = customCategories(from: sourceEdits)
         let knownCategories = Set(sourceCategories.compactMap { category, name in
             destinationCategories[category] == name ? category : nil
         })
@@ -901,8 +925,11 @@ final class CloudLedger: ObservableObject, BookRepository {
             try expenseFields(for: $0, decoder: decoder).id
         }
         for (id, copies) in sourceEntries where !ids.contains(id) {
-            guard let row = copies.first else { continue }
-            let expense = try expenseFields(for: row, decoder: decoder).expense(registeredCategories: knownCategories)
+            guard edits[deletedExpenseKey(id)] == nil, sourceEdits[deletedExpenseKey(id)] == nil,
+                  let row = copies.first else { continue }
+            let fields = try currentExpenseFields(expenseFields(for: row, decoder: decoder),
+                                                  edits: sourceEdits, decoder: decoder)
+            let expense = try fields.expense(registeredCategories: knownCategories)
             guard container?.canUpdateRecord(forManagedObjectWith: destination.objectID) == true
             else { throw BookError.unavailable }
             let split: SplitRule
@@ -962,12 +989,15 @@ final class CloudLedger: ObservableObject, BookRepository {
     }
 
     private func expenses(in book: LedgerBookRow, context: NSManagedObjectContext,
+                          edits: [String: LedgerEditRow] = [:],
                           registeredCategories: Set<Category>? = nil) throws -> [Expense] {
         var ids = Set<UUID>()
         let decoder = JSONDecoder()
         return try context.fetch(expenseRequest(in: book)).compactMap { row in
-            let expense = try expenseFields(for: row, decoder: decoder).expense(registeredCategories: registeredCategories)
-            return ids.insert(expense.id).inserted ? expense : nil
+            let fields = try expenseFields(for: row, decoder: decoder)
+            guard edits[deletedExpenseKey(fields.id)] == nil, ids.insert(fields.id).inserted else { return nil }
+            return try currentExpenseFields(fields, edits: edits, decoder: decoder)
+                .expense(registeredCategories: registeredCategories)
         }.sorted { $0.date > $1.date }
     }
 
@@ -986,6 +1016,18 @@ final class CloudLedger: ObservableObject, BookRepository {
     private func expenseFields(for row: LedgerExpenseRow, decoder: JSONDecoder) throws -> ExpenseFields {
         guard let data = row.payload else { throw ReadError.invalidEntry }
         return try decoder.decode(ExpenseFields.self, from: data)
+    }
+
+    private func expenseEditKey(_ id: UUID) -> String { "expense/\(id.uuidString)" }
+
+    private func deletedExpenseKey(_ id: UUID) -> String { "deletedExpense/\(id.uuidString)" }
+
+    private func currentExpenseFields(_ original: ExpenseFields, edits: [String: LedgerEditRow],
+                                      decoder: JSONDecoder) throws -> ExpenseFields {
+        guard let value = edits[expenseEditKey(original.id)]?.value else { return original }
+        let fields = try decoder.decode(ExpenseFields.self, from: Data(value.utf8))
+        guard fields.id == original.id else { throw ReadError.invalidEntry }
+        return fields
     }
 
     private func receiptRows(for expenseID: UUID, in book: LedgerBookRow,
@@ -1085,6 +1127,62 @@ final class CloudLedger: ObservableObject, BookRepository {
         }
     }
 
+    func update(_ expense: Expense, replacing original: Expense, in book: Book) throws {
+        guard expense.id == original.id else { throw BookError.expenseChanged }
+        if expense.category.isCustom && !plan.allowsProFeatures { throw BookError.proRequired }
+        try write(to: book) { row, store, context in
+            let edits = try latestEdits(in: row, context: context)
+            let copies = try receiptRows(for: expense.id, in: row, context: context)
+            let fields = try editableExpenseFields(copies, id: expense.id, edits: edits)
+            try requireUnchanged(fields, original: original, edits: edits)
+            guard edits[monthKey(Month(containing: expense.date))]?.value != "1" else { throw BookError.settled }
+            // A separate edit keeps the newest fields authoritative even if an older photo row arrives later.
+            let anchor = copies.first(where: { $0.receiptJPEG == nil }) ?? copies[0]
+            guard !book.isGuest || container?.canUpdateRecord(forManagedObjectWith: anchor.objectID) == true
+            else { throw BookError.unavailable }
+            // Preserve an existing custom category if it is hidden after Pro expires.
+            let updated = try Expense(id: expense.id, amount: expense.amount, date: expense.date,
+                                      category: expense.category == original.category ? fields.expense().category : expense.category,
+                                      payer: expense.payer, split: expense.split, label: expense.label)
+            let key = expenseEditKey(expense.id)
+            let payload = try JSONEncoder().encode(ExpenseFields(updated))
+            insertEdit(key, value: String(decoding: payload, as: UTF8.self), in: row, store: store,
+                       context: context, after: edits[key]?.time)
+        }
+    }
+
+    func delete(_ expenseID: UUID, from book: Book, matching original: Expense) throws {
+        try write(to: book) { row, store, context in
+            let edits = try latestEdits(in: row, context: context)
+            let copies = try receiptRows(for: expenseID, in: row, context: context)
+            let fields = try editableExpenseFields(copies, id: expenseID, edits: edits)
+            try requireUnchanged(fields, original: original, edits: edits)
+            guard !book.isGuest || copies.allSatisfy({
+                container?.canDeleteRecord(forManagedObjectWith: $0.objectID) == true
+            }) else { throw BookError.unavailable }
+            // Keep the ID suppressed if a receipt arrives late or a recurring template runs again.
+            insertEdit(deletedExpenseKey(expenseID), value: "1", in: row, store: store, context: context)
+            for copy in copies { context.delete(copy) }
+        }
+    }
+
+    private func editableExpenseFields(_ copies: [LedgerExpenseRow], id: UUID,
+                                       edits: [String: LedgerEditRow]) throws -> ExpenseFields {
+        guard edits[deletedExpenseKey(id)] == nil, let row = copies.first else { throw BookError.expenseChanged }
+        let decoder = JSONDecoder()
+        let fields = try currentExpenseFields(expenseFields(for: row, decoder: decoder), edits: edits, decoder: decoder)
+        guard edits[monthKey(Month(containing: fields.date))]?.value != "1" else { throw BookError.settled }
+        return fields
+    }
+
+    private func requireUnchanged(_ fields: ExpenseFields, original: Expense,
+                                  edits: [String: LedgerEditRow]) throws {
+        let categories = Set(plan.allowsProFeatures ? Array(customCategories(from: edits).keys) : [])
+        guard try fields.expense(registeredCategories: categories) == original else {
+            throw BookError.expenseChanged
+        }
+    }
+
     func receipts(for expenseID: UUID, in book: Book) throws -> Set<Data> {
         let (row, _, context) = try activeRow(in: book)
         return try receiptPhotos(from: receiptRows(for: expenseID, in: row, context: context))
@@ -1092,6 +1190,8 @@ final class CloudLedger: ObservableObject, BookRepository {
 
     func setReceipt(_ photo: ReceiptPhoto?, replacing previous: Set<Data>, for expenseID: UUID, in book: Book) throws {
         try write(to: book) { row, store, context in
+            guard try latestEdits(in: row, context: context)[deletedExpenseKey(expenseID)] == nil
+            else { throw BookError.expenseChanged }
             let copies = try receiptRows(for: expenseID, in: row, context: context)
             guard receiptPhotos(from: copies) == previous else { throw ReceiptPhotoError.changed }
             // Keep a permanent photo-free expense row. Recurring rows also carry the lookup ID.

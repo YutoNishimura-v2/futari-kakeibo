@@ -5,6 +5,7 @@ import UIKit
 
 @MainActor
 struct ExpenseDetail: View {
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject var ledger: CloudLedger
     let book: Book
     let expenseID: UUID
@@ -17,11 +18,17 @@ struct ExpenseDetail: View {
     @State private var confirmDelete = false
     @State private var deleteCandidate: Set<Data>?
     @State private var failure: String?
+    @State private var editing: Expense?
+    @State private var confirmExpenseDeletion = false
+    @State private var pendingExpenseDeletion: Expense?
+    @State private var expenseDeletionFailure: String?
 
     var body: some View {
         Group {
             if let snapshot = ledger.snapshot, snapshot.book == book,
                let expense = snapshot.expenses.first(where: { $0.id == expenseID }) {
+                let canChange = snapshot.member != nil && !ledger.shareBusy
+                    && !snapshot.settled.contains(Month(containing: expense.date))
                 List {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(expense.label ?? snapshot.title(for: expense.category))
@@ -33,6 +40,38 @@ struct ExpenseDetail: View {
                     LabeledContent("日付", value: expense.date.formatted(japaneseDate.year().month().day()))
                     Text(expense.payerCaption(names: snapshot.names)).accessibilityHidden(true)
                     receiptSection(canEdit: snapshot.member != nil && !ledger.shareBusy)
+                    if canChange {
+                        Button("この支出を削除", role: .destructive) {
+                            pendingExpenseDeletion = expense
+                            confirmExpenseDeletion = true
+                        }
+                            .frame(minHeight: 44)
+                    }
+                }
+                .toolbar {
+                    if canChange {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button("編集") { editing = expense }
+                        }
+                    }
+                }
+                .sheet(item: $editing) { original in
+                    EntryForm(snapshot: snapshot, repository: ledger, editing: original)
+                }
+                .confirmationDialog("この支出を削除しますか？", isPresented: $confirmExpenseDeletion,
+                                    titleVisibility: .visible, presenting: pendingExpenseDeletion) { expense in
+                    Button("削除", role: .destructive) {
+                        do {
+                            try ledger.delete(expense.id, from: book, matching: expense)
+                            dismiss()
+                        } catch BookError.settled {
+                            expenseDeletionFailure = "月の明細で精算済みを解除してください。"
+                        } catch {
+                            expenseDeletionFailure = "支出を削除できませんでした。明細を確認してください。"
+                        }
+                    }
+                } message: { expense in
+                    Text("\(expense.amount.yen)の支出とレシート写真を削除します。")
                 }
                 .task(id: snapshot.revision) { loadReceipt() }
                 .task(id: selection) {
@@ -44,6 +83,14 @@ struct ExpenseDetail: View {
         }
         .navigationTitle("支出の詳細")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("支出の削除", isPresented: Binding(
+            get: { expenseDeletionFailure != nil },
+            set: { if !$0 { expenseDeletionFailure = nil } }
+        )) {
+            Button("閉じる", role: .cancel) {}
+        } message: {
+            Text(expenseDeletionFailure ?? "")
+        }
         .alert(deleteCandidate?.count ?? 0 > 1 ? "レシート写真をすべて削除しますか？" : "レシート写真を削除しますか？",
                isPresented: $confirmDelete) {
             Button("削除", role: .destructive) {

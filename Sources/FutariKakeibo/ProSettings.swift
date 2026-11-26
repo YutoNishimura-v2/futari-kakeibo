@@ -57,28 +57,20 @@ struct BudgetSettings: View {
     @ObservedObject var ledger: CloudLedger
     let book: Book
     let month: Month
-    @State private var enteringExpense: LedgerSnapshot?
-    @State private var entryUnavailable = false
+    @State private var copyFailed = false
 
     var body: some View {
         List {
             if !ledger.plan.allowsProFeatures {
                 ProLock("費目別予算", ledger: ledger)
             } else if let snapshot = ledger.snapshot, snapshot.book == book {
-                if snapshot.expenses.isEmpty {
-                    FirstExpensePrompt(canRecord: ledger.canStartRecording, record: startExpense)
-                } else {
-                    budgetRows(snapshot)
-                }
+                budgetRows(snapshot)
             } else {
                 Text("予算を表示できません。家計簿を開き直してください")
             }
         }
         .navigationTitle("費目別予算")
-        .sheet(item: $enteringExpense) { snapshot in
-            EntryForm(snapshot: snapshot, repository: ledger)
-        }
-        .alert("記録を開けませんでした。もう一度お試しください", isPresented: $entryUnavailable) {
+        .alert("前月の予算を引き継げませんでした", isPresented: $copyFailed) {
             Button("閉じる", role: .cancel) {}
         }
     }
@@ -86,8 +78,17 @@ struct BudgetSettings: View {
     private func budgetRows(_ snapshot: LedgerSnapshot) -> some View {
         let categories = snapshot.categories
         let limits = (snapshot.budgets[month] ?? [:]).filter { categories.contains($0.key) }
+        let previousLimits = (snapshot.budgets[month.advanced(by: -1)] ?? [:]).filter { categories.contains($0.key) }
         let totals = try? Ledger.totals(for: snapshot.expenses, in: month)
         return Section(month.start.formatted(japaneseDate.year().month())) {
+            if limits.isEmpty, !previousLimits.isEmpty {
+                Button("前月の予算を引き継ぐ") {
+                    do { try ledger.copyPreviousBudget(to: month, in: book) }
+                    catch { copyFailed = true }
+                }
+                .frame(minHeight: 44)
+                .disabled(snapshot.member == nil || ledger.shareBusy)
+            }
             if let totals {
                 if !limits.isEmpty {
                     if let total = try? Ledger.budgetTotal(limits: limits, totals: totals) {
@@ -121,13 +122,6 @@ struct BudgetSettings: View {
         }
     }
 
-    private func startExpense() {
-        do {
-            let snapshot = try ledger.startRecording()
-            guard snapshot.book == book else { throw BookError.unavailable }
-            enteringExpense = snapshot
-        } catch { entryUnavailable = true }
-    }
 }
 
 private struct BudgetProgressRow: View {
@@ -135,7 +129,11 @@ private struct BudgetProgressRow: View {
     let title: String
     let progress: BudgetProgress
     private var tone: Color {
-        guard progress.overspend > 0 else { return .primary }
+        guard progress.overspend > 0 else {
+            return colorScheme == .dark
+                ? Color(red: 150.0 / 255, green: 225.0 / 255, blue: 177.0 / 255)
+                : Color(red: 23.0 / 255, green: 73.0 / 255, blue: 56.0 / 255)
+        }
         return colorScheme == .dark
             ? Color(red: 1, green: 146.0 / 255, blue: 155.0 / 255)
             : Color(red: 166.0 / 255, green: 27.0 / 255, blue: 41.0 / 255)
@@ -143,15 +141,18 @@ private struct BudgetProgressRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            YenRow(title: title, value: progress.limit.yen)
+            YenRow(title: title, value: "予算 \(progress.limit.yen)")
+            Text("支払済 \(progress.spent.yen)")
+                .font(.subheadline)
+                .monospacedDigit()
             Text(progress.overspend > 0 ? "超過 \(progress.overspend.yen)" : "残り \(progress.remaining.yen)")
                 .font(.headline)
                 .monospacedDigit()
                 .foregroundStyle(tone)
             ProgressView(value: progress.progress)
-                .tint(progress.overspend > 0 ? tone : .accentColor)
+                .tint(tone)
                 .accessibilityHidden(true)
-            Text(progress.displayPercentage.map { "\($0.formatted(.number.precision(.fractionLength(0))))%" }
+            Text(progress.displayPercentage.map { "残り割合 \($0.formatted(.number.precision(.fractionLength(0))))%" }
                  ?? "割合なし")
                 .font(.footnote)
                 .monospacedDigit()

@@ -60,7 +60,7 @@ final class ScreenshotTests: XCTestCase {
             app.buttons["保存"].tap()
             XCTAssertTrue(entry.waitForExistence(timeout: 5))
             let updatedMonth = app.descendants(matching: .any).matching(
-                NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "home-month", "相手から 3,710円")
+                NSPredicate(format: "identifier == %@ AND label CONTAINS %@", "home-month", "あおいから 3,710円 受け取る")
             ).firstMatch
             XCTAssertTrue(updatedMonth.waitForExistence(timeout: 5))
         }
