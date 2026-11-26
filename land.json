@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "land": "land/main",
+  "test": ["node", "--import", "./test/helpers/no-real-root.mjs", "--test", "checks/*.test.mjs"],
+  "publish": {
+    "github": "YutoNishimura-v2/futari-kakeibo",
+    "visibility": "public",
+    "branch": "main",
+    "allow": [
+      "d2e36bb8b95b472c8108d4de482f3d8b27717b291f90ebd183d509c5da040ad0",
+      "72610d3c9e48c32bd354a739eb016aa58824b4e2fcccb1b38d4ffb9661d61727",
+      "3be04c27fcd52603e3d497fc9766c5f294c5c1c63a6237ca8f5738e22b86a833",
+      "c91915104460bbc34cd8adcc193891a25c74236f2c15a7446325528d2116bcc3",
+      "f1f25ea358b5588e9ac8705e19c223010eb5900852f83b261ce08d4cb73ee1e3",
+      "3aaa5e8c06d5df31b15bbeca551bce5e8455da326936df38acf45eb83805d000",
+      "dd6c780710601f9ef98352949fc558bdbdceb8041e7f285d47a3b8b4b4d3c28f",
+      "3f7dcb5214608a9ff750b9272f94085082fbc123e39aea455da6965e2a67a5ef",
+      "0f04bc89beab3c541e046ee9612c31773c738d49fadd8c0a2478bfec252237bd",
+      "7cee51587a78647f5435cd6e2b1cf266ef60c5f2dba73447a6662e2aebae9029"
+    ]
+  }
+}

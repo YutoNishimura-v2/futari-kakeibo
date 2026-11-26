@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" sourceLanguage="Swift">
+    <entity name="LedgerBookRow" representedClassName="LedgerBookRow" syncable="YES">
+        <attribute name="id" optional="YES" attributeType="UUID"/>
+        <attribute name="migrated" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <relationship name="edits" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="LedgerEditRow" inverseName="book" inverseEntity="LedgerEditRow"/>
+        <relationship name="expenses" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="LedgerExpenseRow" inverseName="book" inverseEntity="LedgerExpenseRow"/>
+    </entity>
+    <entity name="LedgerEditRow" representedClassName="LedgerEditRow" syncable="YES">
+        <attribute name="id" optional="YES" attributeType="UUID"/>
+        <attribute name="key" optional="YES" attributeType="String"/>
+        <attribute name="time" optional="YES" attributeType="Date"/>
+        <attribute name="value" optional="YES" attributeType="String"/>
+        <relationship name="book" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerBookRow" inverseName="edits" inverseEntity="LedgerBookRow"/>
+    </entity>
+    <entity name="LedgerExpenseRow" representedClassName="LedgerExpenseRow" syncable="YES">
+        <attribute name="payload" optional="YES" attributeType="Binary"/>
+        <relationship name="book" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="LedgerBookRow" inverseName="expenses" inverseEntity="LedgerBookRow"/>
+    </entity>
+</model>

@@ -1,0 +1,5 @@
+/.xcodegen/
+/FutariKakeibo.xcodeproj/
+/DerivedData/
+*.xcuserstate
+/tmp/
