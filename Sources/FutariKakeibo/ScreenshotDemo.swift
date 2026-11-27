@@ -15,10 +15,10 @@ enum ScreenshotDemo {
     static var member: Member { hasArgument("--screenshot-partner") ? .second : .first }
     static var day: Date? { isEnabled ? date(18) : nil }
 
-    static func price(for option: ProProduct) -> String? {
+    static func price(for option: ProProduct) -> Int? {
         guard isEnabled, let value = ProcessInfo.processInfo.environment[option.rawValue],
               let yen = Int(value), yen > 0 else { return nil }
-        return "\(yen.yen)（仮の値）"
+        return yen
     }
 
     static func expenses() throws -> [Expense] {

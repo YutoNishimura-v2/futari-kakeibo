@@ -1,3 +1,4 @@
+import Foundation
 import StoreKit
 import SwiftUI
 
@@ -17,7 +18,7 @@ struct ProPaywall: View {
         NavigationStack {
             List {
                 Section {
-                    Text("1人分の購入で、共有家計簿のふたりともProを使えます")
+                    Text("1契約で共有家計簿のふたりともProを使えます")
                         .fontWeight(.semibold)
                     Text("用途に合わせて家計簿を追加する（複数家計簿）")
                     Text("費目ごとに予算と残額を確認する")
@@ -29,7 +30,7 @@ struct ProPaywall: View {
                 } header: {
                     Text("Proでできること")
                 } footer: {
-                    Text("1人分の購入で共有家計簿のふたりとも使えます。iCloudでの共有と同期は無料です。")
+                    Text("iCloudでの共有と同期は無料です。")
                 }
                 Section {
                     ForEach(ProProduct.allCases, id: \.self) { option in
@@ -45,6 +46,9 @@ struct ProPaywall: View {
                             .frame(minHeight: 44)
                     }
                 } footer: {
+                    if let yearlySavings {
+                        Text("年額は月額12か月分より約\(yearlySavings)%お得")
+                    }
                     Text(purchaseTerms)
                         .accessibilityIdentifier("purchase-terms")
                 }
@@ -93,9 +97,20 @@ struct ProPaywall: View {
     }
 
     private func price(for option: ProProduct) -> String? {
-        if let demo = ScreenshotDemo.price(for: option) { return demo }
-        guard let product = products[option] else { return nil }
-        return product.description.contains("仮の値") ? "\(product.displayPrice)（仮の値）" : product.displayPrice
+        if let demo = ScreenshotDemo.price(for: option) { return demo.yen }
+        return products[option]?.displayPrice
+    }
+
+    private func priceAmount(for option: ProProduct) -> Decimal? {
+        if let demo = ScreenshotDemo.price(for: option) { return Decimal(demo) }
+        return products[option]?.price
+    }
+
+    private var yearlySavings: Int? {
+        guard let monthly = priceAmount(for: .monthly), let yearly = priceAmount(for: .yearly),
+              yearly > 0, yearly < monthly * 12 else { return nil }
+        let savings = NSDecimalNumber(decimal: (1 - yearly / (monthly * 12)) * 100).intValue
+        return savings > 0 ? savings : nil
     }
 
     private var purchaseTerms: String {
@@ -108,8 +123,6 @@ struct ProPaywall: View {
                 return "14日間無料でお試し後、年ごとに自動更新\(amount)。無料体験を含め、終了の24時間前までに「設定」→「サブスクリプション」で解約できます。"
             }
             return "年ごとに自動更新\(amount)。終了の24時間前までに「設定」→「サブスクリプション」で解約できます。"
-        case .lifetime:
-            return "お支払いは一回\(amount)。自動更新はありません。"
         }
     }
 

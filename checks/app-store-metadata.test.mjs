@@ -27,6 +27,15 @@ test('the listing explains solo entry and free iCloud sharing before Pro', () =>
   const basics = description.slice(0, pro);
   assert.match(basics, /招待する前でも、ひとりで支出を記録できます/);
   assert.match(basics, /iCloud での共有と同期は無料です/);
+  const catalog = JSON.parse(readFileSync(new URL('../FutariKakeibo.storekit', import.meta.url), 'utf8'));
+  const [monthly, yearly] = catalog.subscriptionGroups[0].subscriptions.map(({ displayPrice }) => Number(displayPrice));
+  const yearlyTotal = monthly * 12;
+  const savings = Math.floor((1 - yearly / yearlyTotal) * 100);
+  const yen = (price) => price.toLocaleString('ja-JP') + '円';
+
+  assert.ok(description.includes('月額' + yen(monthly) + 'または年額' + yen(yearly) + 'の自動更新'));
+  assert.ok(description.includes('一人の契約で、同じ共有家計簿のふたりとも Pro'));
+  assert.ok(description.includes('月額12か月分の' + yen(yearlyTotal) + 'に比べて約' + savings + '%お得'));
 });
 
 test('metadata limits accept the boundary and reject overlong Japanese subtitles and keywords', () => {

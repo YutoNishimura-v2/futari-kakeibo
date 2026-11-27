@@ -4,7 +4,7 @@
 
 - **基準コミットの確認**: `land/main`（`HEAD`）は `489636e7`（「Apply the top fixes from the round 5 household ledger critique (Codex)」）であり、第5回修正コミット `f341392a` と差分ゼロ（`git diff f341392a 489636e7` が空）の再適用コミットがベースに含まれていることを確認した。
 - **検証制約と「推測」表記**: GitHub Actions の承認待ちにより CI スクリーンショットが未取得であり、実機・シミュレータ画像も存在しない。そのため、本批評は SwiftUI ソース・デモデータ・StoreKit 設定・App Store 掲載原稿のみを根拠とし、**視覚・配色・レイアウト・フォント・操作感に関する判定にはすべて「推測」を付す**。
-- **価格表記の確認**: `FutariKakeibo.storekit:6,11,22,45,50,61,72,77,88`、`Sources/FutariKakeibo/ProPaywall.swift:86`、`Sources/FutariKakeibo/ScreenshotDemo.swift:21`、`docs/release-checklist.md:11-13` はいずれも「仮の値」「仮」と明記されており、`docs/app-store/metadata.ja.json:5`・`docs/app-store/subscription-terms.ja.md:7`・`docs/legal/terms.md:18` は未確定の金額を記載していない。**オーナー未確定の価格を確定値として表示している箇所は見つからなかった**が、正式価格は依然として未確定である。
+- **価格表記の確認（2026年11月27日更新）**　日本は月額480円・年額3,600円。1契約で共有家計簿のふたりとも利用できる。年額は月額12か月分の5,760円に比べて約37%お得。
 
 ---
 
@@ -15,7 +15,7 @@
 | 1. 初回1分（最初の価値までのタップ数） | 6 | **7** | 保存直後に自分の最新支出がホームに表示されるようになった（+1）一方、iCloud 初期取込待ちの入力ブロックが未解消 |
 | 2. ホームの明快さ（主数値1つ・過不足なし） | 6 | **7** | 精算文に「支払う／受け取る」が付き、支出合計の折りたたみ内に円グラフが入った（+1）が、予算残額がホームになく円グラフ凡例も隠れている |
 | 3. メイン画面（予算・明細・精算） | 5 | **7** | 支出の編集・削除、予算の「支払済」「残り割合」「前月引継」と色分けが入り大きく改善（+2）。ただし既知課題 3 件と精算内訳の欠落が残る |
-| 4. 課金画面（Paywall） | 6 | **6** | 第5回から未変更。全 Pro 機能・2人共用訴求・動的無料体験 CTA が弱く、正式価格も未確定 |
+| 4. 課金画面（Paywall） | 6 | **6** | 第5回から未変更。全 Pro 機能・2人共用訴求・動的無料体験 CTA が弱く |
 | 5. 2〜7日目の継続理由（ウィジェット・通知・招待） | 4 | **4** | 第5回から未変更。無料ウィジェット無表示、通知 20 時固定、メール手入力必須の招待導線がそのまま |
 | 6. ストア公開準備（掲載文・画像・設定） | 6 | **6** | `ScreenshotTests.swift:63` の文言追従のみで、スクショ見出し原稿・アイコン組込・本番識別子・サポート URL は未整備 |
 | 7. アクセシビリティ（文字拡大・VoiceOver・配色） | 7 | **7** | `BudgetProgressRow` の配色コントラスト検証と「予算」ラベル、ホーム円グラフの AX 回避は改善したが、`ProLock` と `.teal` 等が残課題 |
@@ -55,7 +55,7 @@
 - **現状の実装**:
   - `ProPaywall.swift:18-26` は「家計簿追加・費目別予算・定期入力」の 3 点のみ記載し、実装済みの買い物リスト・支出推移グラフ・CSV・ウィジェット・精算日通知・カスタム費目・テーマ（`PaidBookTools.swift:46-60`）が伝わらない。
   - 最大の訴求である「1人の購入で共有家計簿のふたりとも Pro」がセクション脚注（`ProPaywall.swift:25`）に埋もれている。
-  - 購入ボタンが常に「購入手続きへ」（`45`）で、`isEligibleForIntroOffer` 判定による「14日間無料で始める」等の動的 CTA がなく（`95` は静的文言）、正式価格も `FutariKakeibo.storekit` で仮の値（480 / 4,800 / 7,800 円）のままである。
+  - 購入ボタンが常に「購入手続きへ」（`45`）で、`isEligibleForIntroOffer` 判定による「14日間無料で始める」等の動的 CTA がなく（`95` は静的文言）。
 
 ### (5) 2〜7日目の継続理由（ウィジェット・通知・招待）
 - **参考パターンの型**: ホーム画面ウィジェットや通知から毎日1タップで戻り、相手をすぐ招待して2人利用を定着させる。
@@ -90,13 +90,13 @@
   - Node ソースチェックで、`WidgetPublishing.swift` が無料プランでも今月の支出合計または精算額を書き出し（`budgetRemaining` のみ Pro 限定）、`LedgerWidget.swift` が `.widgetURL(` を持ち無料時に `"有料プランで使う"` のみの空表示をしないこと。
   - `BookSettings.swift` に記録通知時刻（`hour` / `minute`）のユーザー選択状態があり、`FutariKakeiboApp.swift` に未共有かつ支出1件以上のオーナー向け招待導線が存在すること。
 
-### ギャップ 2（売上インパクト 2位）: 課金画面（Paywall）の訴求不足と未確定価格
+### ギャップ 2（売上インパクト 2位）: 課金画面（Paywall）の訴求不足
 - **場面**: 課金画面（Paywall）
 - **該当箇所**: `Sources/FutariKakeibo/ProPaywall.swift:18-26,45-48,83-99`、`FutariKakeibo.storekit:6,45,72`
-- **内容**: 実装済み Pro 8機能のうち 3 つしか見せず、「1人分でパートナーも使える」主価値が脚注にある。年額選択時も動的対象判定付きの無料体験ボタン文言にならず、価格も仮の値のまま。
+- **内容**: 実装済み Pro 8機能のうち 3 つしか見せず、「1人分でパートナーも使える」主価値が脚注にある。年額選択時も動的対象判定付きの無料体験ボタン文言にならず。
 - **機械検証できる合格条件**:
   - Node ソースチェックで、`ProPaywall.swift` がプラン一覧より前に「1人分の購入で2人とも使える」旨と全主要 Pro 機能（複数家計簿・費目別予算・定期入力・買い物リスト・支出推移グラフ・CSV・ウィジェット・精算日通知）を含み、`isEligibleForIntroOffer` に応じてボタン文言を切り替えること。
-  - オーナーの価格確定後、`FutariKakeibo.storekit` と `ProPaywall.swift` に `仮の値` 表記が残らないこと。
+  - 月額480円・年額3,600円を日本の StoreKit 設定に反映する。
 
 ### ギャップ 3（売上インパクト 3位）: ホームの予算残額／超過色の欠如と円グラフ凡例の非表示
 - **場面**: ホーム画面・月明細（日常の残額確認）
@@ -177,7 +177,7 @@
 | ギャップ | 対応 |
 | --- | --- |
 | 1. 2〜7日目の継続フック（無料ウィジェット・通知時刻・招待導線） | **直した**（`Sources/FutariKakeibo/WidgetPublishing.swift:10`、`Sources/FutariWidget/LedgerWidget.swift:48`、`Sources/FutariKakeibo/BookSettings.swift:125`、`Sources/FutariKakeibo/FutariKakeiboApp.swift:145`、`Sources/FutariKakeibo/CloudLedger.swift:635`）。無料プランでも精算額をウィジェット表示し（`budgetRemaining` のみ Pro 限定）、`.widgetURL` からの即記録導線を追加。記録リマインダー時刻を `DatePicker` で選択可能にし、未共有かつ支出1件以上のオーナー向けにホーム招待導線を追加。検証は `checks/pro-ledger.test.mjs:621` と `checks/pro-ledger.test.mjs:650`。 |
-| 2. 課金画面（Paywall）の訴求強化と動的無料体験 CTA | **直した**（`Sources/FutariKakeibo/ProPaywall.swift:19`）。プラン一覧の前に「1人分の購入で、共有家計簿のふたりともProを使えます」および全主要 Pro 機能を明記し、`isEligibleForIntroOffer` に応じてボタン文言を切り替えるよう変更。なお正式価格はオーナー未確定のため `仮の値` 表記を保持している。検証は `checks/pro-ledger.test.mjs:481`。 |
+| 2. 課金画面（Paywall）の訴求強化と動的無料体験 CTA | **直した**（`Sources/FutariKakeibo/ProPaywall.swift:19`）。プラン一覧の前に「1契約で共有家計簿のふたりともProを使えます」および全主要 Pro 機能を明記し、`isEligibleForIntroOffer` に応じてボタン文言を切り替えるよう変更。日本の価格は月額480円・年額3,600円。検証は `checks/pro-ledger.test.mjs:481`。 |
 | 3. ホームの予算サマリ・円グラフ凡例・月明細の残額/超過色 | **直した**（`Sources/FutariKakeibo/FutariKakeiboApp.swift:292`、`Sources/FutariKakeibo/FutariKakeiboApp.swift:170`、`Sources/FutariKakeibo/FutariKakeiboApp.swift:500`、`Sources/FutariKakeibo/ProSettings.swift:127`）。`HomeSpending` の `.chartLegend(.hidden)` を外して費目ごとの色見本付き凡例を表示し、`MonthDetail` の残り/超過およびホームの予算サマリに `budgetTone`（明暗コントラスト比 4.5:1 以上）を適用。検証は `checks/pro-ledger.test.mjs:469` と `checks/pro-ledger.test.mjs:666`。 |
 | 4. 初回1分における iCloud 初期取込待ちの入力ブロック | **見送り**（取込前の仮ローカル記録から既存の個人・共有家計簿へ重複・欠損なく統合する動作は、複数 iCloud アカウントと実機・Xcode 環境での CloudKit 同期検証が必要であり Windows 上では検証できない。現行の `mayCreatePrimary` 待機を前提とする既存テストとも整合確認が別途必要）。 |
 | 5. ストア公開準備（スクショ見出し原稿・アイコン・本番設定） | **見送り**（採用アイコン・本番 Bundle ID・CloudKit コンテナ・公開/サポート URL がオーナー未確定であり、`AppIcon` アセット組込および `FutariScreenshots` 実行には Xcode が必要）。 |

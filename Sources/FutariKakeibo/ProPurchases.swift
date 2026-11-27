@@ -5,19 +5,21 @@ import StoreKit
 enum ProProduct: String, CaseIterable {
     case monthly = "local.futarikakeibo.pro.monthly"
     case yearly = "local.futarikakeibo.pro.yearly"
-    case lifetime = "local.futarikakeibo.pro.lifetime"
 
     var title: String {
         switch self {
         case .monthly: "月額"
         case .yearly: "年額"
-        case .lifetime: "買い切り"
         }
     }
 }
 
 @MainActor
 final class ProPurchases {
+    // Continue processing transactions from the former local catalog.
+    private static let legacyLifetimeID = "local.futarikakeibo.pro.lifetime"
+    private static let entitlementIDs = ProProduct.allCases.map(\.rawValue) + [legacyLifetimeID]
+
     private weak var ledger: CloudLedger?
     private var listener: Task<Void, Never>?
     private var entitlementScan: Task<Bool?, Error>?
@@ -87,12 +89,12 @@ final class ProPurchases {
 
     private func receive(_ result: VerificationResult<Transaction>) async {
         guard case .verified(let transaction) = result else {
-            if ProProduct(rawValue: result.unsafePayloadValue.productID) != nil {
+            if Self.entitlementIDs.contains(result.unsafePayloadValue.productID) {
                 ledger?.purchaseUpdateFailed()
             }
             return
         }
-        guard ProProduct(rawValue: transaction.productID) != nil else { return }
+        guard Self.entitlementIDs.contains(transaction.productID) else { return }
         if (try? await refresh(including: transaction)) != nil {
             await transaction.finish()
         }
@@ -117,8 +119,8 @@ final class ProPurchases {
         var unverified = false
 
         func include(_ transaction: Transaction, current: Bool) {
-            guard let option = ProProduct(rawValue: transaction.productID),
-                  option == .lifetime || transaction.expirationDate != nil else { return }
+            guard Self.entitlementIDs.contains(transaction.productID),
+                  transaction.productID == Self.legacyLifetimeID || transaction.expirationDate != nil else { return }
             let revoked = transaction.revocationDate != nil || transaction.isUpgraded
             guard current || revoked else { return }
             let grant = ProGrant(purchasedAt: transaction.purchaseDate, expiresAt: transaction.expirationDate,
@@ -129,8 +131,8 @@ final class ProPurchases {
             grants[grantID] = grant
         }
 
-        for option in ProProduct.allCases {
-            switch await Transaction.latest(for: option.rawValue) {
+        for productID in Self.entitlementIDs {
+            switch await Transaction.latest(for: productID) {
             case .verified(let latest)?: include(latest, current: false)
             case .unverified?: unverified = true
             case nil: break
@@ -140,7 +142,7 @@ final class ProPurchases {
             switch result {
             case .verified(let current): include(current, current: true)
             case .unverified(let current, _):
-                if ProProduct(rawValue: current.productID) != nil { unverified = true }
+                if Self.entitlementIDs.contains(current.productID) { unverified = true }
             }
         }
         if let transaction { include(transaction, current: true) }

@@ -81,7 +81,7 @@ final class ScreenshotTests: XCTestCase {
         capture("paywall", style, in: app)
         let terms = app.descendants(matching: .any).matching(NSPredicate(
             format: "identifier == %@ AND label CONTAINS %@ AND label CONTAINS %@",
-            "purchase-terms", "年ごとに自動更新", "仮の値"
+            "purchase-terms", "年ごとに自動更新", "3,600円"
         )).firstMatch
         try reveal(terms, in: app)
         app.terminate()

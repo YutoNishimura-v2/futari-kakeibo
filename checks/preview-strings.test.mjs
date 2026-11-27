@@ -170,7 +170,7 @@ function buildSwiftMatcher(swiftSources) {
         if (japaneseLits.length > 0) {
           pattern += `(?:${japaneseLits.map(escapeRegExp).join('|')})`;
         } else if (/\byen\b|amount|price/.test(expr)) {
-          pattern += ' ?[0-9,]+円(?:（仮の値）)?';
+          pattern += ' ?[0-9,]+円';
         } else if (/names\b|payer/.test(expr)) {
           pattern += '[ぁ-んァ-ヶー一-龠]{1,8}';
         } else if (/formatted\(/.test(expr)) {
@@ -222,6 +222,14 @@ test('every visible Japanese string in tools/preview/*.html appears in the Swift
 
   const missing = findMissingPreviewStrings(htmlEntries, swiftSources);
   assert.deepEqual(missing, []);
+  const catalog = JSON.parse(readFileSync(path.join(root, 'FutariKakeibo.storekit'), 'utf8'));
+  const [monthly, yearly] = catalog.subscriptionGroups[0].subscriptions.map(({ displayPrice }) => Number(displayPrice));
+  const paywall = htmlEntries.find(({ file }) => file.endsWith('/paywall.html'));
+  const displayedPrices = [...paywall.html.matchAll(/class="option-price">([0-9,]+)円</g)]
+    .map(([, price]) => Number(price.replaceAll(',', '')));
+  assert.deepEqual(displayedPrices, [monthly, yearly]);
+  const savings = Math.floor((1 - yearly / (monthly * 12)) * 100);
+  assert.ok(paywall.html.includes('年額は月額12か月分より約' + savings + '%お得'));
 });
 
 test('source check fails when a preview HTML fixture contains a Japanese string missing from Swift sources', () => {

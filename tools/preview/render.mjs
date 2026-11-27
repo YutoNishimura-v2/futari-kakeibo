@@ -9,6 +9,10 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const previewDir = path.join(root, 'tools', 'preview');
 const outputDir = path.join(root, 'docs', 'preview');
 const screens = ['home', 'budget', 'paywall'];
+const requestedScreen = process.argv[2];
+if (requestedScreen && !screens.includes(requestedScreen)) {
+  throw new Error('Choose home, budget or paywall.');
+}
 
 function findBrowser() {
   const override = process.env.PREVIEW_BROWSER;
@@ -40,7 +44,7 @@ mkdirSync(outputDir, { recursive: true });
 const profileDir = mkdtempSync(path.join(os.tmpdir(), 'futari-preview-'));
 
 try {
-  for (const screen of screens) {
+  for (const screen of requestedScreen ? [requestedScreen] : screens) {
     const htmlPath = path.join(previewDir, `${screen}.html`);
     const outPath = path.join(outputDir, `${screen}-390.png`);
     const args = [

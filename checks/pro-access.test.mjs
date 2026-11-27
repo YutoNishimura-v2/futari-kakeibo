@@ -62,25 +62,25 @@ test('a StoreKit scan waits for the running scan and still processes its own tra
 
 test('failed verification of the latest known purchase is reported even without a current entitlement', () => {
   const swift = readFileSync(new URL('../Sources/FutariKakeibo/ProPurchases.swift', import.meta.url), 'utf8');
-  assert.match(swift, /switch await Transaction\.latest\(for: option\.rawValue\) \{\s*case \.verified\(let latest\)\?: include\(latest, current: false\)\s*case \.unverified\?: unverified = true/);
+  assert.match(swift, /switch await Transaction\.latest\(for: productID\) \{\s*case \.verified\(let latest\)\?: include\(latest, current: false\)\s*case \.unverified\?: unverified = true/);
   assert.match(swift, /let saved = try ledger\.updatePurchases\(grants, verificationFailed: unverified\)\s*guard !unverified else \{ throw PurchaseError\.verification \}/);
 });
 
-test('local StoreKit products match the app IDs and contain the provisional Japanese prices', () => {
+test('the StoreKit catalog sells only monthly and yearly auto-renewing plans at 480 and 3600 JPY', () => {
   const catalog = JSON.parse(readFileSync(new URL('../FutariKakeibo.storekit', import.meta.url)));
   const config = readFileSync(new URL('../Sources/FutariKakeibo/ProPurchases.swift', import.meta.url), 'utf8');
-  const [{ subscriptions }] = catalog.subscriptionGroups;
-  const [monthly, yearly] = subscriptions;
-  const [oneTime] = catalog.products;
-  const products = [monthly, yearly, oneTime];
+  const products = catalog.subscriptionGroups.flatMap((group) => group.subscriptions);
+  const [monthly, yearly] = products;
   assert.equal(catalog.settings._storefront, 'JPN');
-  assert.deepEqual([...config.matchAll(/case (?:monthly|yearly|lifetime) = "([^"]+)"/g)].map((match) => match[1]),
-    products.map((product) => product.productID));
-  for (const [product, min, max] of [[monthly, 300, 980], [yearly, 2400, 7800], [oneTime, 4800, 9800]]) {
+  assert.deepEqual(catalog.products, []);
+  assert.deepEqual(catalog.nonRenewingSubscriptions, []);
+  assert.equal(catalog.subscriptionGroups.length, 1);
+  assert.deepEqual(products.map(({ displayPrice }) => Number(displayPrice)), [480, 3600]);
+  assert.deepEqual([...config.matchAll(/case \w+ = "([^"]+)"/g)].map((match) => match[1]),
+    products.map(({ productID }) => productID));
+  for (const product of products) {
+    assert.equal(product.type, 'RecurringSubscription');
     assert.equal(product.familyShareable, true);
-    assert.match(product.referenceName, /仮の値/);
-    assert.ok(product.localizations.every(({ description }) => description.includes('仮の値')));
-    assert.ok(Number(product.displayPrice) >= min && Number(product.displayPrice) <= max);
   }
   assert.equal(monthly.recurringSubscriptionPeriod, 'P1M');
   assert.equal(yearly.recurringSubscriptionPeriod, 'P1Y');
@@ -89,7 +89,6 @@ test('local StoreKit products match the app IDs and contain the provisional Japa
     [yearly.introductoryOffer.paymentMode, yearly.introductoryOffer.subscriptionPeriod,
       yearly.introductoryOffer.numberOfPeriods], ['free', 'P2W', 1],
   );
-  assert.equal(oneTime.type, 'NonConsumable');
 });
 
 test('the generated app scheme runs with the local StoreKit catalog', () => {

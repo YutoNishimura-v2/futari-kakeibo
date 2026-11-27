@@ -483,7 +483,7 @@ test('the paywall explains shared two-person value, all major Pro features and f
   const firstPrice = paywall.indexOf('ForEach(ProProduct.allCases');
   assert.ok(firstPrice > 0);
   for (const benefit of [
-    '1人分の購入で、共有家計簿のふたりともProを使えます',
+    '1契約で共有家計簿のふたりともProを使えます',
     '家計簿を追加',
     '予算と残額',
     '毎月の支出を自動で記録',
@@ -500,7 +500,7 @@ test('the paywall explains shared two-person value, all major Pro features and f
   assert.ok(paywall.indexOf('Button(purchaseButtonTitle)') > firstPrice);
   assert.match(paywall, /isEligibleForIntroOffer/);
   assert.match(paywall, /selection == \.yearly && yearlyIntroEligible \? "14日間無料で始める" : "購入手続きへ"/);
-  assert.match(paywall, /仮の値/);
+  assert.match(paywall, /return products\[option\]\?\.displayPrice/);
   const invite = cloudMethod('invite');
   assert.match(invite, /guard canShare/);
   assert.doesNotMatch(invite, /allowsProFeatures|proRequired/);
