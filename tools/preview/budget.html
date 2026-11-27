@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>費目別予算 — Budget Preview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg-grouped: #F2F2F7;
+      --bg-card: #FFFFFF;
+      --bg-nav: rgba(249, 249, 249, 0.94);
+      --separator: rgba(60, 60, 67, 0.29);
+      --label: #000000;
+      --secondary-label: rgba(60, 60, 67, 0.6);
+      --disclosure: rgba(60, 60, 67, 0.3);
+      --tint: #007AFF;
+      --tone-ok: rgb(23, 73, 56);
+      --tone-over: rgb(166, 27, 41);
+      --track: rgba(120, 120, 128, 0.16);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 390px;
+      min-height: 844px;
+      background: var(--bg-grouped);
+      color: var(--label);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .nav-bar {
+      height: 44px;
+      padding: 0 12px;
+      background: var(--bg-nav);
+      border-bottom: 0.5px solid var(--separator);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .nav-back {
+      position: absolute;
+      left: 8px;
+      top: 0;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--tint);
+      font-size: 17px;
+    }
+    .nav-title {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 600;
+      line-height: 22px;
+      letter-spacing: -0.02em;
+    }
+    .list {
+      padding: 14px 16px 20px;
+    }
+    .section-header {
+      padding: 0 16px 6px;
+      font-size: 13px;
+      line-height: 18px;
+      color: var(--secondary-label);
+    }
+    .card {
+      background: var(--bg-card);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .row {
+      padding: 10px 16px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .progress-stack {
+      flex: 1;
+      padding: 3px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .yen-row {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .row-title {
+      font-size: 17px;
+      line-height: 22px;
+      font-weight: 400;
+    }
+    .row-value {
+      font-size: 17px;
+      line-height: 22px;
+      color: var(--secondary-label);
+      font-variant-numeric: tabular-nums;
+    }
+    .subheadline {
+      font-size: 15px;
+      line-height: 20px;
+      font-variant-numeric: tabular-nums;
+    }
+    .headline {
+      font-size: 17px;
+      line-height: 22px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .footnote {
+      font-size: 13px;
+      line-height: 18px;
+      font-variant-numeric: tabular-nums;
+    }
+    .tone-ok { color: var(--tone-ok); }
+    .tone-over { color: var(--tone-over); }
+    .progress-track {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--track);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 2px;
+    }
+    .tone-ok-bg { background: var(--tone-ok); }
+    .tone-over-bg { background: var(--tone-over); }
+    .separator {
+      height: 0.5px;
+      margin-left: 16px;
+      background: var(--separator);
+    }
+    .chevron-muted { color: var(--disclosure); flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <header class="nav-bar">
+    <div class="nav-back">
+      <svg width="11" height="18" viewBox="0 0 11 18" fill="none" aria-hidden="true">
+        <path d="M9.5 1.5L2 9L9.5 16.5" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>月の明細</span>
+    </div>
+    <h1 class="nav-title">費目別予算</h1>
+  </header>
+
+  <main class="list">
+    <div class="section-header">2026年6月</div>
+    <section class="card">
+      <div class="row">
+        <div class="progress-stack">
+          <div class="yen-row">
+            <span class="row-title">予算の合計</span>
+            <span class="row-value">予算 22,000円</span>
+          </div>
+          <div class="subheadline">支払済 13,020円</div>
+          <div class="headline tone-ok">残り 8,980円</div>
+          <div class="progress-track"><div class="progress-fill tone-ok-bg" style="width: 59.18%"></div></div>
+          <div class="footnote tone-ok">残り割合 40%</div>
+        </div>
+      </div>
+      <div class="separator"></div>
+
+      <div class="row">
+        <div class="progress-stack">
+          <div class="yen-row">
+            <span class="row-title">食料品</span>
+            <span class="row-value">予算 18,000円</span>
+          </div>
+          <div class="subheadline">支払済 8,420円</div>
+          <div class="headline tone-ok">残り 9,580円</div>
+          <div class="progress-track"><div class="progress-fill tone-ok-bg" style="width: 46.78%"></div></div>
+          <div class="footnote tone-ok">残り割合 53%</div>
+        </div>
+        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="separator"></div>
+
+      <div class="row">
+        <div class="progress-stack">
+          <div class="yen-row">
+            <span class="row-title">外食</span>
+            <span class="row-value">予算 4,000円</span>
+          </div>
+          <div class="subheadline">支払済 4,600円</div>
+          <div class="headline tone-over">超過 600円</div>
+          <div class="progress-track"><div class="progress-fill tone-over-bg" style="width: 100%"></div></div>
+          <div class="footnote tone-over">残り割合 -15%</div>
+        </div>
+        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="separator"></div>
+
+      <div class="row">
+        <div class="yen-row"><span class="row-title">日用品</span><span class="row-value">未設定</span></div>
+        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="separator"></div>
+
+      <div class="row">
+        <div class="yen-row"><span class="row-title">住居</span><span class="row-value">未設定</span></div>
+        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="separator"></div>
+
+      <div class="row">
+        <div class="yen-row"><span class="row-title">水道光熱</span><span class="row-value">未設定</span></div>
+        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="separator"></div>
+
+      <div class="row">
+        <div class="yen-row"><span class="row-title">交通</span><span class="row-value">未設定</span></div>
+        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="separator"></div>
+
+      <div class="row">
+        <div class="yen-row"><span class="row-title">娯楽</span><span class="row-value">未設定</span></div>
+        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="separator"></div>
+
+      <div class="row">
+        <div class="yen-row"><span class="row-title">その他</span><span class="row-value">未設定</span></div>
+        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

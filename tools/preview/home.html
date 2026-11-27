@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ふたりの家計簿 — Home Preview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg-grouped: #F2F2F7;
+      --bg-card: #FFFFFF;
+      --bg-nav: rgba(249, 249, 249, 0.94);
+      --separator: rgba(60, 60, 67, 0.29);
+      --label: #000000;
+      --secondary-label: rgba(60, 60, 67, 0.6);
+      --disclosure: rgba(60, 60, 67, 0.3);
+      --tint: #007AFF;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 390px;
+      min-height: 844px;
+      background: var(--bg-grouped);
+      color: var(--label);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .nav-bar {
+      height: 44px;
+      padding: 0 16px;
+      background: var(--bg-nav);
+      border-bottom: 0.5px solid var(--separator);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .nav-title {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 600;
+      line-height: 22px;
+      letter-spacing: -0.02em;
+    }
+    .nav-trailing {
+      position: absolute;
+      right: 16px;
+      top: 0;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      color: var(--tint);
+    }
+    .list {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .card {
+      background: var(--bg-card);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .settlement-row {
+      padding: 19px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .settlement-link {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .settlement-title {
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.18;
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+      word-break: keep-all;
+    }
+    .month-menu {
+      min-width: 44px;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--tint);
+      font-size: 15px;
+      font-weight: 400;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .prominent-button {
+      width: 100%;
+      min-height: 44px;
+      border: none;
+      border-radius: 10px;
+      background: var(--tint);
+      color: #FFFFFF;
+      font-family: inherit;
+      font-size: 17px;
+      font-weight: 400;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 16px;
+    }
+    .row {
+      padding: 11px 16px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .separator {
+      height: 0.5px;
+      margin-left: 16px;
+      background: var(--separator);
+    }
+    .expense-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 2px 0;
+    }
+    .body-text {
+      font-size: 17px;
+      line-height: 22px;
+      font-weight: 400;
+    }
+    .headline-digits {
+      font-size: 17px;
+      line-height: 22px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .yen-row {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .secondary-digits {
+      font-size: 17px;
+      line-height: 22px;
+      color: var(--secondary-label);
+      font-variant-numeric: tabular-nums;
+    }
+    .chevron-muted { color: var(--disclosure); flex-shrink: 0; }
+    .chevron-tint { color: var(--tint); flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <header class="nav-bar">
+    <h1 class="nav-title">ふたりの家計簿</h1>
+    <div class="nav-trailing" aria-hidden="true">
+      <svg width="24" height="18" viewBox="0 0 24 18" fill="none">
+        <circle cx="9.5" cy="5.5" r="3" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3.5 15.5c0-3 2.7-4.8 6-4.8s6 1.8 6 4.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <circle cx="16.5" cy="6.5" r="2.3" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M16.5 11c2.4 0 4.3 1.3 4.5 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </header>
+
+  <main class="list">
+    <section class="card">
+      <div class="settlement-row">
+        <div class="settlement-link">
+          <div class="settlement-title">あおいから 3,110円 受け取る</div>
+          <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+            <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="month-menu">
+          <span>2026年6月</span>
+          <svg width="11" height="7" viewBox="0 0 11 7" fill="none" aria-hidden="true">
+            <path d="M1 1.25L5.5 5.75L10 1.25" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <button class="prominent-button" type="button">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M8 2.5V13.5M2.5 8H13.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <span>支出を記録</span>
+    </button>
+
+    <section class="card">
+      <div class="row">
+        <div class="expense-stack">
+          <div class="body-text">ふたりの夕食</div>
+          <div class="body-text">あおいが支払い</div>
+          <div class="headline-digits">4,600円</div>
+        </div>
+        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="separator"></div>
+      <div class="row">
+        <div class="yen-row">
+          <span class="body-text">支出合計</span>
+          <span class="secondary-digits">15,420円</span>
+        </div>
+        <svg class="chevron-tint" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
