@@ -976,6 +976,9 @@ extension Expense {
     }
 }
 
+// Use the ledger category throughout the app where Objective-C also exposes Category.
+typealias Category = FutariDomain.Category
+
 extension Category {
     var title: String {
         switch self {
