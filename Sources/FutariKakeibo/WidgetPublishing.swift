@@ -7,13 +7,14 @@ enum WidgetPublishing {
     static func publish(access: ProAccess, snapshot: LedgerSnapshot?, bookTitle: String?) {
         guard let defaults = LedgerWidgetData.defaults else { return }
         var next: Data?
-        if access.plan.allowsProFeatures, let snapshot, let member = snapshot.member, let bookTitle {
+        if let snapshot, let member = snapshot.member, let bookTitle {
             let month = Month(containing: Month.localDay(.now))
+            let isPro = access.plan.allowsProFeatures
             let data = LedgerWidgetData(
                 month: month, book: bookTitle,
-                budgetRemaining: try? remaining(in: month, snapshot: snapshot),
+                budgetRemaining: isPro ? (try? remaining(in: month, snapshot: snapshot)) : nil,
                 amountOwed: try? owed(by: member, in: month, snapshot: snapshot),
-                proExpiresAt: access.expiresAt
+                proExpiresAt: isPro ? access.expiresAt : .distantPast
             )
             let encoder = JSONEncoder()
             encoder.outputFormatting = .sortedKeys

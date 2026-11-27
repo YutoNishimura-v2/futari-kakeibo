@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { createExpense, localDay, monthlyTotals } from './ledger.mjs';
 import { bookAccess } from './pro-access.mjs';
-import { bookExpenses, bookSettlement, budgetProgress, budgetRemaining, changeExpense, missingRecurring, recurringID } from './pro-ledger.mjs';
+import { bookExpenses, bookSettlement, budgetProgress, budgetRemaining, changeExpense, missingRecurring, purgeDeletedExpenses, recurringID } from './pro-ledger.mjs';
 import { latestEdits, ownedBookPlan } from './shared-book.mjs';
 
 const january = Date.UTC(2026, 0, 1);
@@ -478,15 +478,29 @@ test('Swift puts the configured budget total above categories and shows accessib
   }
 });
 
-test('the paywall explains the three Pro benefits and free sharing before plans or purchase', () => {
+test('the paywall explains shared two-person value, all major Pro features and free sharing before plans or purchase', () => {
   const paywall = source('FutariKakeibo/ProPaywall.swift');
   const firstPrice = paywall.indexOf('ForEach(ProProduct.allCases');
   assert.ok(firstPrice > 0);
-  for (const benefit of ['家計簿を追加', '予算と残額', '毎月の支出を自動で記録', 'iCloudでの共有と同期は無料']) {
+  for (const benefit of [
+    '1人分の購入で、共有家計簿のふたりともProを使えます',
+    '家計簿を追加',
+    '予算と残額',
+    '毎月の支出を自動で記録',
+    '買い物リスト',
+    '支出推移グラフ',
+    'CSV書き出し',
+    'ウィジェット',
+    '精算日の通知',
+    'iCloudでの共有と同期は無料',
+  ]) {
     const offset = paywall.indexOf(benefit);
     assert.ok(offset >= 0 && offset < firstPrice, benefit);
   }
-  assert.ok(paywall.indexOf('Button("購入手続きへ")') > firstPrice);
+  assert.ok(paywall.indexOf('Button(purchaseButtonTitle)') > firstPrice);
+  assert.match(paywall, /isEligibleForIntroOffer/);
+  assert.match(paywall, /selection == \.yearly && yearlyIntroEligible \? "14日間無料で始める" : "購入手続きへ"/);
+  assert.match(paywall, /仮の値/);
   const invite = cloudMethod('invite');
   assert.match(invite, /guard canShare/);
   assert.doesNotMatch(invite, /allowsProFeatures|proRequired/);
@@ -604,11 +618,14 @@ test('a writable guest sees how their first payment is shared even in a populate
   assert.match(app, /if let snapshot = ledger\.snapshot, !snapshot\.expenses\.isEmpty, snapshot\.book\.isGuest,\s*let member = snapshot\.member, ledger\.canStartRecording,\s*!snapshot\.expenses\.contains\(where: \{ \$0\.payer == member \}\) \{\s*Text\("自分の支払いを記録すると、ふたりの家計簿に反映されます"\)/);
 });
 
-test('free settings offer an opt-in local recording reminder and can cancel it', () => {
+test('free settings offer an opt-in local recording reminder with selectable time and can cancel it', () => {
   const paid = settings.indexOf('if ledger.plan.allowsProFeatures');
   const reminder = settings.indexOf('RecordingReminder()');
   assert.ok(reminder >= 0 && reminder < paid);
-  assert.match(settings, /if enabled \{[\s\S]*?requestAuthorization\([\s\S]*?DateComponents\(hour: 20, minute: 0\)[\s\S]*?repeats: true[\s\S]*?try await center\.add\(UNNotificationRequest\(identifier: reminderID[\s\S]*?else \{\s*center\.removePendingNotificationRequests\(withIdentifiers: \[reminderID\]\)/);
+  assert.match(settings, /@AppStorage\("ledger\.recordingHour"\) private var hour = 20/);
+  assert.match(settings, /@AppStorage\("ledger\.recordingMinute"\) private var minute = 0/);
+  assert.match(settings, /DatePicker\("通知時刻", selection: timeBinding, displayedComponents: \.hourAndMinute\)/);
+  assert.match(settings, /if enabled \{[\s\S]*?requestAuthorization\([\s\S]*?DateComponents\(hour: hour, minute: minute\)[\s\S]*?repeats: true[\s\S]*?try await center\.add\(UNNotificationRequest\(identifier: reminderID[\s\S]*?else \{\s*center\.removePendingNotificationRequests\(withIdentifiers: \[reminderID\]\)/);
   assert.match(settings, /catch \{\s*reminderFailure = true/);
 });
 
@@ -628,4 +645,64 @@ test('zero-balance month can be closed with guidance that no transfer is needed'
   const app = source('FutariKakeibo/FutariKakeiboApp.swift');
   assert.match(app, /case \.open\(nil\):\s*Text\("送金は不要です。精算済みにすると、この月の記録が締まります。"\)/);
   assert.match(app, /case \.open\(\.some\(_\)\):\s*Text\("支払いを確認してから/);
+});
+
+test('widget shows settlement for free users, opens quick entry and home invites unshared owners', () => {
+  const publishing = source('FutariKakeibo/WidgetPublishing.swift');
+  const widget = source('FutariWidget/LedgerWidget.swift');
+  const app = source('FutariKakeibo/FutariKakeiboApp.swift');
+  assert.match(publishing, /if let snapshot, let member = snapshot\.member, let bookTitle \{/);
+  assert.match(publishing, /budgetRemaining: isPro \? \(try\? remaining\(in: month, snapshot: snapshot\)\) : nil/);
+  assert.match(publishing, /amountOwed: try\? owed\(by: member, in: month, snapshot: snapshot\)/);
+  assert.match(publishing, /proExpiresAt: isPro \? access\.expiresAt : \.distantPast/);
+  assert.match(widget, /\.widgetURL\(URL\(string: "futarikakeibo:\/\/record"\)\)/);
+  assert.doesNotMatch(widget, /有料プランで使う/);
+  assert.match(widget, /if entry\.pro, let budgetRemaining = summary\.budgetRemaining \{\s*amount\("今月の予算残額", budgetRemaining\)\s*\}\s*amount\("今月の支払う精算額", summary\.amountOwed\)/);
+  assert.match(app, /openURLContexts[\s\S]*?futarikakeibo[\s\S]*?requestQuickRecord\(\)/);
+  assert.match(app, /pendingQuickRecord[\s\S]*?consumeQuickRecord\(\)[\s\S]*?startExpense\(\)/);
+  assert.match(app, /!snapshot\.expenses\.isEmpty,\s*!snapshot\.book\.isGuest, ledger\.canShare, !ledger\.isBookShared, ledger\.partnerNotice == nil[\s\S]*?InvitePartner\(ledger: ledger, book: snapshot\.book\)/);
+});
+
+test('home spending shows matched color swatches without hiding the legend and month detail colors budget status', () => {
+  const app = source('FutariKakeibo/FutariKakeiboApp.swift');
+  const spending = app.slice(app.indexOf('private struct HomeSpending: View'), app.indexOf('struct FirstExpensePrompt: View'));
+  assert.doesNotMatch(spending, /\.chartLegend\(\.hidden\)/);
+  assert.match(spending, /SectorMark\([\s\S]*?\.foregroundStyle\(swatchColor\(for: category, in: positive\)/);
+  assert.match(spending, /if showChart, let swatch = swatchColor\(for: category, in: positive\) \{\s*RoundedRectangle\([\s\S]*?\.fill\(swatch\)[\s\S]*?\}\s*YenRow\(title: snapshot\.title\(for: category\), value: totals\[category, default: 0\]\.yen\)/);
+  const detail = app.slice(app.indexOf('private struct MonthDetail: View'), app.indexOf('private struct SettlementReview: View'));
+  assert.match(detail, /Text\(remaining < 0 \? "超過 \\\(\(-remaining\)\.yen\)" : "残り \\\(remaining\.yen\)"\)\s*\.font\(\.footnote\)\s*\.foregroundStyle\(budgetTone\(overspend: remaining < 0, colorScheme: colorScheme\)\)/);
+  assert.match(app, /YenRow\(\s*title: "今月の予算",[\s\S]*?\.foregroundStyle\(budgetTone\(overspend: progress\.overspend > 0, colorScheme: colorScheme\)\)/);
+});
+
+test('late deleted receipt rows and orphaned recurring rows are hidden and purged while keeping deletion markers', () => {
+  const original = expense('lunch', 600, february, 'dining');
+  const other = expense('groceries', 200, february, 'groceries', 'second');
+  const deleted = changeExpense(book({ expenses: [original, other] }), original.id);
+  const latePhotoRow = { ...original, receiptJPEG: true };
+  const withLatePhoto = { ...deleted, expenses: [latePhotoRow, ...deleted.expenses] };
+  assert.deepEqual(bookExpenses(withLatePhoto), [other]);
+  const cleanedPhoto = purgeDeletedExpenses(withLatePhoto);
+  assert.deepEqual(cleanedPhoto.purged, [latePhotoRow]);
+  assert.deepEqual(cleanedPhoto.book.expenses, [other]);
+  assert.ok(cleanedPhoto.book.deletedExpenses.has(original.id));
+
+  const rent = expense(rentID, 100, january, 'housing');
+  const templateBook = book({ templates: [rent] });
+  const [generated] = missingRecurring(templateBook, february);
+  const regeneratedBeforeMarker = { ...templateBook, expenses: [generated] };
+  const lateMarkerArrived = { ...regeneratedBeforeMarker, deletedExpenses: new Set([generated.id]) };
+  assert.deepEqual(bookExpenses(lateMarkerArrived), []);
+  assert.deepEqual(missingRecurring(lateMarkerArrived, february), []);
+  const cleanedRecurring = purgeDeletedExpenses(lateMarkerArrived);
+  assert.deepEqual(cleanedRecurring.purged, [generated]);
+  assert.deepEqual(cleanedRecurring.book.expenses, []);
+  assert.ok(cleanedRecurring.book.deletedExpenses.has(generated.id));
+
+  const purge = cloudMethod('purgeDeletedExpenseRows');
+  assert.match(purge, /edits\.keys\.contains\(where: \{ \$0\.hasPrefix\("deletedExpense\/"\) \}\)/);
+  assert.match(purge, /\(try\? expenseFields\(for: row, decoder: decoder\)\.id\) \?\? row\.recurringID/);
+  assert.match(purge, /edits\[deletedExpenseKey\(id\)\] != nil/);
+  assert.match(purge, /!book\.isGuest \|\| container\.canDeleteRecord\(forManagedObjectWith: row\.objectID\)/);
+  assert.match(purge, /context\.delete\(row\)/);
+  assert.match(cloudMethod('refresh'), /for \(book, row\) in available[\s\S]*?try purgeDeletedExpenseRows\(in: row, book: book, edits: edits/);
 });

@@ -124,11 +124,36 @@ struct BookSettings: View {
 @MainActor
 private struct RecordingReminder: View {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("ledger.recordingHour") private var hour = 20
+    @AppStorage("ledger.recordingMinute") private var minute = 0
     @State private var reminderEnabled: Bool?
     @State private var reminderBusy = false
     @State private var reminderFailure = false
     private let reminderID = "ledger.recording"
     private let center = UNUserNotificationCenter.current()
+
+    private var timeBinding: Binding<Date> {
+        Binding(
+            get: {
+                var components = DateComponents()
+                components.hour = hour
+                components.minute = minute
+                return Calendar.autoupdatingCurrent.date(from: components) ?? .now
+            },
+            set: { next in
+                let parts = Calendar.autoupdatingCurrent.dateComponents([.hour, .minute], from: next)
+                let nextHour = parts.hour ?? hour
+                let nextMinute = parts.minute ?? minute
+                guard nextHour != hour || nextMinute != minute else { return }
+                hour = nextHour
+                minute = nextMinute
+                if reminderEnabled == true, !reminderBusy {
+                    reminderBusy = true
+                    Task { await save(enabled: true) }
+                }
+            }
+        )
+    }
 
     var body: some View {
         Section("記録のリマインダー") {
@@ -137,10 +162,13 @@ private struct RecordingReminder: View {
                     reminderBusy = true
                     Task { await save(enabled: !reminderEnabled) }
                 } label: {
-                    Text(reminderEnabled ? "毎日20時の通知をオフ" : "毎日20時に通知する")
+                    Text(reminderEnabled ? "毎日の通知をオフ" : "毎日決まった時刻に通知する")
                         .frame(minHeight: 44)
                 }
                 .disabled(reminderBusy)
+                DatePicker("通知時刻", selection: timeBinding, displayedComponents: .hourAndMinute)
+                    .environment(\.locale, Locale(identifier: "ja_JP"))
+                    .disabled(reminderBusy)
             } else {
                 ProgressView("通知設定を確認中").frame(minHeight: 44)
             }
@@ -149,7 +177,12 @@ private struct RecordingReminder: View {
             guard scenePhase == .active, !reminderBusy else { return }
             let pending = await center.pendingNotificationRequests()
             guard !Task.isCancelled, !reminderBusy else { return }
-            reminderEnabled = pending.contains { $0.identifier == reminderID }
+            let existing = pending.first { $0.identifier == reminderID }
+            reminderEnabled = existing != nil
+            if let trigger = existing?.trigger as? UNCalendarNotificationTrigger {
+                hour = trigger.dateComponents.hour ?? hour
+                minute = trigger.dateComponents.minute ?? minute
+            }
         }
         .alert("通知を設定できませんでした", isPresented: $reminderFailure) {
             Button("閉じる", role: .cancel) {}
@@ -170,7 +203,7 @@ private struct RecordingReminder: View {
                 content.body = "今日の支出をふたりの家計簿に記録しましょう。"
                 content.sound = .default
                 let trigger = UNCalendarNotificationTrigger(
-                    dateMatching: DateComponents(hour: 20, minute: 0), repeats: true
+                    dateMatching: DateComponents(hour: hour, minute: minute), repeats: true
                 )
                 try await center.add(UNNotificationRequest(identifier: reminderID, content: content, trigger: trigger))
             } else {
@@ -184,7 +217,7 @@ private struct RecordingReminder: View {
 }
 
 @MainActor
-private struct InvitePartner: View {
+struct InvitePartner: View {
     @ObservedObject var ledger: CloudLedger
     let book: Book
     @State private var email = ""
@@ -196,6 +229,8 @@ private struct InvitePartner: View {
             if let notice = ledger.partnerNotice ?? ledger.notice {
                 Text(notice).font(.footnote).foregroundStyle(.secondary)
             }
+            Text("安全のため、相手のApple Accountのメールアドレスで1対1の招待リンクを作ります。")
+                .font(.footnote).foregroundStyle(.secondary)
             TextField("相手のApple Accountのメールアドレス", text: $email)
                 .keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never)

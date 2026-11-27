@@ -7,6 +7,7 @@ struct ProPaywall: View {
     @ObservedObject var ledger: CloudLedger
     @State private var selection = ProProduct.yearly
     @State private var products: [ProProduct: Product] = [:]
+    @State private var yearlyIntroEligible = ScreenshotDemo.isEnabled
     @State private var loading = !ScreenshotDemo.isEnabled
     @State private var priceLoadFailed = false
     @State private var busy = false
@@ -16,13 +17,19 @@ struct ProPaywall: View {
         NavigationStack {
             List {
                 Section {
-                    Text("用途に合わせて家計簿を追加する")
+                    Text("1人分の購入で、共有家計簿のふたりともProを使えます")
+                        .fontWeight(.semibold)
+                    Text("用途に合わせて家計簿を追加する（複数家計簿）")
                     Text("費目ごとに予算と残額を確認する")
-                    Text("家賃など毎月の支出を自動で記録する")
+                    Text("家賃など毎月の支出を自動で記録する（定期入力）")
+                    Text("ふたりで共有できる買い物リスト")
+                    Text("年間・前月比の支出推移グラフ")
+                    Text("CSV書き出し・ホーム画面ウィジェットで予算残額表示")
+                    Text("精算日の通知・費目追加・テーマ変更")
                 } header: {
                     Text("Proでできること")
                 } footer: {
-                    Text("費目別予算と定期入力は、共有家計簿でふたりとも使えます。iCloudでの共有と同期は無料です。")
+                    Text("1人分の購入で共有家計簿のふたりとも使えます。iCloudでの共有と同期は無料です。")
                 }
                 Section {
                     ForEach(ProProduct.allCases, id: \.self) { option in
@@ -42,7 +49,7 @@ struct ProPaywall: View {
                         .accessibilityIdentifier("purchase-terms")
                 }
                 Section {
-                    Button("購入手続きへ") { Task { await buy() } }
+                    Button(purchaseButtonTitle) { Task { await buy() } }
                         .fontWeight(.semibold)
                         .frame(minHeight: 44)
                         .disabled(busy || products[selection] == nil || !ledger.canPurchasePro)
@@ -64,6 +71,7 @@ struct ProPaywall: View {
     }
 
     private func optionRow(_ option: ProProduct) -> some View {
+        let title = option == .yearly && yearlyIntroEligible ? "年額（14日間無料）" : option.title
         return Button {
             selection = option
         } label: {
@@ -71,13 +79,17 @@ struct ProPaywall: View {
                 Text(price(for: option) ?? (loading ? "読み込み中" : "価格未取得"))
                     .foregroundStyle(.secondary)
             } label: {
-                Label(option.title, systemImage: selection == option ? "largecircle.fill.circle" : "circle")
+                Label(title, systemImage: selection == option ? "largecircle.fill.circle" : "circle")
                     .foregroundStyle(.primary)
             }
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .accessibilityAddTraits(selection == option ? .isSelected : [])
+    }
+
+    private var purchaseButtonTitle: String {
+        selection == .yearly && yearlyIntroEligible ? "14日間無料で始める" : "購入手続きへ"
     }
 
     private func price(for option: ProProduct) -> String? {
@@ -92,7 +104,10 @@ struct ProPaywall: View {
         case .monthly:
             return "月ごとに自動更新\(amount)。更新を止めるには、終了の24時間前までに「設定」→「サブスクリプション」で解約してください。"
         case .yearly:
-            return "対象の方は14日間無料。年ごとに自動更新\(amount)。無料体験を含め、終了の24時間前までに「設定」→「サブスクリプション」で解約できます。"
+            if yearlyIntroEligible {
+                return "14日間無料でお試し後、年ごとに自動更新\(amount)。無料体験を含め、終了の24時間前までに「設定」→「サブスクリプション」で解約できます。"
+            }
+            return "年ごとに自動更新\(amount)。終了の24時間前までに「設定」→「サブスクリプション」で解約できます。"
         case .lifetime:
             return "お支払いは一回\(amount)。自動更新はありません。"
         }
@@ -105,6 +120,11 @@ struct ProPaywall: View {
         defer { loading = false }
         do {
             products.merge(try await ledger.purchases.products()) { _, new in new }
+            if let subscription = products[.yearly]?.subscription, subscription.introductoryOffer != nil {
+                yearlyIntroEligible = await subscription.isEligibleForIntroOffer
+            } else {
+                yearlyIntroEligible = false
+            }
         } catch {
             priceLoadFailed = true
         }

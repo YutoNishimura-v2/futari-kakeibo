@@ -169,3 +169,20 @@
 1. **既知課題 (1) 削除後に遅れて届いた写真行がストレージに残る**: **ギャップ 6 として計上**（`CloudLedger.swift:998,1154-1167,1212-1219`）。UI 上は隠れるが Core Data / CloudKit 上の最大 2 MB バイナリが解放されないため要修正。
 2. **既知課題 (2) CloudKit 同期順による削除済み定期入力の一時的再生成**: **ギャップ 7 として計上**（`CloudLedger.swift:135-138,251-257,730-761`）。`importedStores` 到達後のバッチ分割到着で一時生成・孤立行発生が起こり得るため要修正。
 3. **既知課題 (3) Swift チェックが正規表現のみで iOS ビルド未通**: **ギャップ 8 として計上**（`checks/pro-ledger.test.mjs` 全般）。コンパイル整合性・実画面レイアウト・Core Data / CloudKit 実動作が未確認である以上、出荷判定上の明確なギャップとして扱う。
+
+---
+
+## 対応
+
+| ギャップ | 対応 |
+| --- | --- |
+| 1. 2〜7日目の継続フック（無料ウィジェット・通知時刻・招待導線） | **直した**（`Sources/FutariKakeibo/WidgetPublishing.swift:10`、`Sources/FutariWidget/LedgerWidget.swift:48`、`Sources/FutariKakeibo/BookSettings.swift:125`、`Sources/FutariKakeibo/FutariKakeiboApp.swift:145`、`Sources/FutariKakeibo/CloudLedger.swift:635`）。無料プランでも精算額をウィジェット表示し（`budgetRemaining` のみ Pro 限定）、`.widgetURL` からの即記録導線を追加。記録リマインダー時刻を `DatePicker` で選択可能にし、未共有かつ支出1件以上のオーナー向けにホーム招待導線を追加。検証は `checks/pro-ledger.test.mjs:621` と `checks/pro-ledger.test.mjs:650`。 |
+| 2. 課金画面（Paywall）の訴求強化と動的無料体験 CTA | **直した**（`Sources/FutariKakeibo/ProPaywall.swift:19`）。プラン一覧の前に「1人分の購入で、共有家計簿のふたりともProを使えます」および全主要 Pro 機能を明記し、`isEligibleForIntroOffer` に応じてボタン文言を切り替えるよう変更。なお正式価格はオーナー未確定のため `仮の値` 表記を保持している。検証は `checks/pro-ledger.test.mjs:481`。 |
+| 3. ホームの予算サマリ・円グラフ凡例・月明細の残額/超過色 | **直した**（`Sources/FutariKakeibo/FutariKakeiboApp.swift:292`、`Sources/FutariKakeibo/FutariKakeiboApp.swift:170`、`Sources/FutariKakeibo/FutariKakeiboApp.swift:500`、`Sources/FutariKakeibo/ProSettings.swift:127`）。`HomeSpending` の `.chartLegend(.hidden)` を外して費目ごとの色見本付き凡例を表示し、`MonthDetail` の残り/超過およびホームの予算サマリに `budgetTone`（明暗コントラスト比 4.5:1 以上）を適用。検証は `checks/pro-ledger.test.mjs:469` と `checks/pro-ledger.test.mjs:666`。 |
+| 4. 初回1分における iCloud 初期取込待ちの入力ブロック | **見送り**（取込前の仮ローカル記録から既存の個人・共有家計簿へ重複・欠損なく統合する動作は、複数 iCloud アカウントと実機・Xcode 環境での CloudKit 同期検証が必要であり Windows 上では検証できない。現行の `mayCreatePrimary` 待機を前提とする既存テストとも整合確認が別途必要）。 |
+| 5. ストア公開準備（スクショ見出し原稿・アイコン・本番設定） | **見送り**（採用アイコン・本番 Bundle ID・CloudKit コンテナ・公開/サポート URL がオーナー未確定であり、`AppIcon` アセット組込および `FutariScreenshots` 実行には Xcode が必要）。 |
+| 6. 削除済み支出に後から到着したレシート写真行の残留 | **直した**（`Sources/FutariKakeibo/CloudLedger.swift:917`、`Sources/FutariKakeibo/CloudLedger.swift:610`）。`deletedExpense/<id>` が存在する支出の遅着 `LedgerExpenseRow` を削除権限確認下で `context.delete` により清掃し、削除マーカーを保持する。検証は `checks/pro-ledger.mjs:76` と `checks/pro-ledger.test.mjs:677`。 |
+| 7. CloudKit 同期順による削除済み定期入力の一時的再生成 | **直した**（`Sources/FutariKakeibo/CloudLedger.swift:610`、`Sources/FutariKakeibo/CloudLedger.swift:917`）。遅れて `deletedExpense/<id>` が到着した際も表示を非表示にしつつ、孤立した `recurringID` 行を `purgeDeletedExpenseRows` で自動削除する。検証は `checks/pro-ledger.mjs:76` と `checks/pro-ledger.test.mjs:677`。 |
+| 8. iOS 実ビルド、精算内訳、`ProLock` VoiceOver・AX 等 | **次回**（今回の約 10 ファイル制限内で売上インパクト上位のギャップ 1〜3 と既知課題 6〜7 を優先実装した。加えて iOS ビルド・`FutariScreenshots`・VoiceOver・最大文字サイズの実画面確認には Xcode が必要）。 |
+
+Windows で Node の純粋関数テストとソースチェックを実施。iOS ビルド、実画面、CloudKit の実機同期は未確認。

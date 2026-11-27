@@ -64,6 +64,8 @@ final class CloudLedger: ObservableObject, BookRepository {
     @Published private(set) var shareBusy = false
     @Published private(set) var partnerNotice: String?
     @Published private(set) var inviteIssue: InviteIssue?
+    @Published private(set) var isBookShared = false
+    @Published private(set) var pendingQuickRecord = false
 
     private let cloud: CKContainer?
     private let configuredPlan: Plan
@@ -606,6 +608,11 @@ final class CloudLedger: ObservableObject, BookRepository {
                     NSLog("Ledger recurring: %@", String(describing: error))
                     recurringError = true
                 }
+                for (book, row) in available {
+                    guard let edits = bookEdits[book] else { continue }
+                    try purgeDeletedExpenseRows(in: row, book: book, edits: edits,
+                                                container: container, context: context)
+                }
             }
             let preferred = try preferredOwned(owned, shares: shares, context: context)
             let primary = available.first { $0.1 === preferred }
@@ -619,6 +626,7 @@ final class CloudLedger: ObservableObject, BookRepository {
             let guest = available.first { $0.0.isGuest && member(for: $0.0, share: shares[$0.1.objectID]) == .second }
             let additional = available.first { titles[$0.0] != nil }
             partnerNotice = nil
+            isBookShared = false
             guard let (book, row) = selected ?? establishedPrimary ?? guest ?? primary ?? additional
                     ?? available.first(where: { $0.0.isGuest }) else {
                 snapshot = nil
@@ -628,6 +636,7 @@ final class CloudLedger: ObservableObject, BookRepository {
 
             let share = shares[row.objectID]
             if !book.isGuest && account == .available { observePartner(in: share, book: book) }
+            isBookShared = book.isGuest || (share.map(activePartners)?.contains { $0.acceptanceStatus == .accepted } ?? false)
             let member = self.member(for: book, share: share)
             let plan = access(for: book).plan
             let edits = bookEdits[book] ?? [:]
@@ -894,6 +903,32 @@ final class CloudLedger: ObservableObject, BookRepository {
             if previous?.value != value {
                 insertEdit(key, value: value, in: row, store: store, context: context, after: previous?.time)
             }
+        }
+    }
+
+    func requestQuickRecord() {
+        pendingQuickRecord = true
+    }
+
+    func consumeQuickRecord() {
+        pendingQuickRecord = false
+    }
+
+    private func purgeDeletedExpenseRows(
+        in bookRow: LedgerBookRow, book: Book, edits: [String: LedgerEditRow],
+        container: NSPersistentCloudKitContainer, context: NSManagedObjectContext
+    ) throws {
+        guard edits.keys.contains(where: { $0.hasPrefix("deletedExpense/") }) else { return }
+        let decoder = JSONDecoder()
+        for row in try context.fetch(expenseRequest(in: bookRow)) {
+            let id = (try? expenseFields(for: row, decoder: decoder).id) ?? row.recurringID
+            guard let id, edits[deletedExpenseKey(id)] != nil else { continue }
+            guard !book.isGuest || container.canDeleteRecord(forManagedObjectWith: row.objectID) else { continue }
+            context.delete(row)
+        }
+        if context.hasChanges {
+            do { try context.save() }
+            catch { context.rollback(); throw error }
         }
     }
 

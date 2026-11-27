@@ -45,6 +45,16 @@ final class LedgerSceneDelegate: UIResponder, UIWindowSceneDelegate {
         if !ScreenshotDemo.isEnabled, let metadata = options.cloudKitShareMetadata {
             Task { await ledger.accept(metadata) }
         }
+        if !ScreenshotDemo.isEnabled,
+           options.urlContexts.contains(where: { $0.url.scheme == "futarikakeibo" }) {
+            ledger.requestQuickRecord()
+        }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard !ScreenshotDemo.isEnabled,
+              URLContexts.contains(where: { $0.url.scheme == "futarikakeibo" }) else { return }
+        ledger?.requestQuickRecord()
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
@@ -65,6 +75,7 @@ final class LedgerSceneDelegate: UIResponder, UIWindowSceneDelegate {
 @MainActor
 private struct Home: View {
     @ObservedObject var ledger: CloudLedger
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var selectedMonth: Month?
     @State private var enteringExpense: LedgerSnapshot?
@@ -131,6 +142,14 @@ private struct Home: View {
                         Text("自分の支払いを記録すると、ふたりの家計簿に反映されます")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
+                    if let snapshot = ledger.snapshot, !snapshot.expenses.isEmpty,
+                       !snapshot.book.isGuest, ledger.canShare, !ledger.isBookShared, ledger.partnerNotice == nil {
+                        NavigationLink {
+                            InvitePartner(ledger: ledger, book: snapshot.book)
+                        } label: {
+                            Text("パートナーを招待").frame(minHeight: 44)
+                        }
+                    }
                     if let snapshot = ledger.snapshot,
                        let expense = recentExpense(in: month, snapshot: snapshot) {
                         NavigationLink {
@@ -147,6 +166,22 @@ private struct Home: View {
                     }
                     if let snapshot = ledger.snapshot, !snapshot.expenses.isEmpty {
                         HomeSpending(month: month, snapshot: snapshot)
+                    }
+                    if let snapshot = ledger.snapshot, ledger.plan.allowsProFeatures,
+                       let limits = snapshot.budgets[month]?.filter({ snapshot.categories.contains($0.key) }),
+                       !limits.isEmpty,
+                       let totals = try? Ledger.totals(for: snapshot.expenses, in: month),
+                       let progress = try? Ledger.budgetTotal(limits: limits, totals: totals) {
+                        NavigationLink {
+                            BudgetSettings(ledger: ledger, book: snapshot.book, month: month)
+                        } label: {
+                            YenRow(
+                                title: "今月の予算",
+                                value: progress.overspend > 0 ? "超過 \(progress.overspend.yen)" : "残り \(progress.remaining.yen)"
+                            )
+                            .foregroundStyle(budgetTone(overspend: progress.overspend > 0, colorScheme: colorScheme))
+                            .frame(minHeight: 44)
+                        }
                     }
                 }
                 .onChange(of: currentMonth) { _, _ in ledger.refresh() }
@@ -167,12 +202,21 @@ private struct Home: View {
         .tint(ledger.plan.allowsProFeatures ? theme.tint : nil)
         .id(ledger.snapshot?.book)
         .onChange(of: ledger.snapshot?.book) { _, _ in selectedMonth = nil }
+        .onChange(of: ledger.pendingQuickRecord) { _, _ in openQuickRecordIfReady() }
+        .onChange(of: ledger.canStartRecording) { _, _ in openQuickRecordIfReady() }
+        .onAppear { openQuickRecordIfReady() }
         .sheet(item: $enteringExpense) { snapshot in
             EntryForm(snapshot: snapshot, repository: ledger)
         }
         .alert("記録を開けませんでした。もう一度お試しください", isPresented: $entryUnavailable) {
             Button("閉じる", role: .cancel) {}
         }
+    }
+
+    private func openQuickRecordIfReady() {
+        guard ledger.pendingQuickRecord, ledger.canStartRecording, enteringExpense == nil else { return }
+        ledger.consumeQuickRecord()
+        startExpense()
     }
 
     private func startExpense() {
@@ -249,6 +293,16 @@ private struct HomeSpending: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let month: Month
     let snapshot: LedgerSnapshot
+    private let chartPalette: [Color] = [
+        Color(red: 23.0 / 255, green: 73.0 / 255, blue: 56.0 / 255),
+        Color(red: 31.0 / 255, green: 98.0 / 255, blue: 142.0 / 255),
+        Color(red: 158.0 / 255, green: 84.0 / 255, blue: 18.0 / 255),
+        Color(red: 112.0 / 255, green: 42.0 / 255, blue: 158.0 / 255),
+        Color(red: 166.0 / 255, green: 27.0 / 255, blue: 41.0 / 255),
+        Color(red: 67.0 / 255, green: 109.0 / 255, blue: 32.0 / 255),
+        Color(red: 120.0 / 255, green: 72.0 / 255, blue: 96.0 / 255),
+        Color(red: 85.0 / 255, green: 92.0 / 255, blue: 102.0 / 255),
+    ]
 
     var body: some View {
         if let total = try? Ledger.spendingTotal(for: snapshot.expenses, in: month),
@@ -268,18 +322,23 @@ private struct HomeSpending: View {
         }
     }
 
+    private func swatchColor(for category: Category, in positive: [Category]) -> Color? {
+        guard let index = positive.firstIndex(of: category) else { return nil }
+        return chartPalette[index % chartPalette.count]
+    }
+
     private func breakdown(categories: [Category], totals: [Category: Int], total: Int) -> some View {
         let positive = categories.filter { totals[$0, default: 0] > 0 }
+        let showChart = !typeSize.isAccessibilitySize && !positive.isEmpty && totals.values.allSatisfy { $0 >= 0 }
         return DisclosureGroup {
-            if !typeSize.isAccessibilitySize, !positive.isEmpty, totals.values.allSatisfy({ $0 >= 0 }) {
+            if showChart {
                 ZStack {
                     Chart(positive, id: \.self) { category in
                         SectorMark(angle: .value("支出", totals[category, default: 0]), innerRadius: .ratio(0.72))
-                            .foregroundStyle(by: .value("費目", category.rawValue))
+                            .foregroundStyle(swatchColor(for: category, in: positive) ?? .accentColor)
                             .accessibilityLabel(Text(snapshot.title(for: category)))
                             .accessibilityValue(Text(totals[category, default: 0].yen))
                     }
-                    .chartLegend(.hidden)
                     Text("支出合計\n\(total.yen)")
                         .font(.subheadline.weight(.semibold))
                         .monospacedDigit()
@@ -292,7 +351,15 @@ private struct HomeSpending: View {
                 .frame(height: 184)
             }
             ForEach(categories, id: \.self) { category in
-                YenRow(title: snapshot.title(for: category), value: totals[category, default: 0].yen)
+                HStack(spacing: 10) {
+                    if showChart, let swatch = swatchColor(for: category, in: positive) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(swatch)
+                            .frame(width: 12, height: 12)
+                            .accessibilityHidden(true)
+                    }
+                    YenRow(title: snapshot.title(for: category), value: totals[category, default: 0].yen)
+                }
             }
         } label: {
             YenRow(title: "支出合計", value: total.yen)
@@ -370,6 +437,7 @@ private struct SettlementAmount: View {
 
 @MainActor
 private struct MonthDetail: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var ledger: CloudLedger
     @State private var month: Month
     let book: Book
@@ -428,7 +496,8 @@ private struct MonthDetail: View {
                             VStack(alignment: .trailing, spacing: 4) {
                                 YenRow(title: snapshot.title(for: category), value: totals[category, default: 0].yen)
                                 Text(remaining < 0 ? "超過 \((-remaining).yen)" : "残り \(remaining.yen)")
-                                    .font(.footnote).foregroundStyle(.secondary)
+                                    .font(.footnote)
+                                    .foregroundStyle(budgetTone(overspend: remaining < 0, colorScheme: colorScheme))
                             }
                         } else if let total = totals[category] {
                             YenRow(title: snapshot.title(for: category), value: total.yen)

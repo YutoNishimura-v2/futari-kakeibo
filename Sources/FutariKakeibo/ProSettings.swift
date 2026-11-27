@@ -124,19 +124,23 @@ struct BudgetSettings: View {
 
 }
 
+func budgetTone(overspend: Bool, colorScheme: ColorScheme) -> Color {
+    guard overspend else {
+        return colorScheme == .dark
+            ? Color(red: 150.0 / 255, green: 225.0 / 255, blue: 177.0 / 255)
+            : Color(red: 23.0 / 255, green: 73.0 / 255, blue: 56.0 / 255)
+    }
+    return colorScheme == .dark
+        ? Color(red: 1, green: 146.0 / 255, blue: 155.0 / 255)
+        : Color(red: 166.0 / 255, green: 27.0 / 255, blue: 41.0 / 255)
+}
+
 private struct BudgetProgressRow: View {
     @Environment(\.colorScheme) private var colorScheme
     let title: String
     let progress: BudgetProgress
     private var tone: Color {
-        guard progress.overspend > 0 else {
-            return colorScheme == .dark
-                ? Color(red: 150.0 / 255, green: 225.0 / 255, blue: 177.0 / 255)
-                : Color(red: 23.0 / 255, green: 73.0 / 255, blue: 56.0 / 255)
-        }
-        return colorScheme == .dark
-            ? Color(red: 1, green: 146.0 / 255, blue: 155.0 / 255)
-            : Color(red: 166.0 / 255, green: 27.0 / 255, blue: 41.0 / 255)
+        budgetTone(overspend: progress.overspend > 0, colorScheme: colorScheme)
     }
 
     var body: some View {

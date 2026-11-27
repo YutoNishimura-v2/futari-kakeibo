@@ -72,3 +72,20 @@ export function changeExpense(book, id, replacement) {
 export function bookSettlement(book, dates) {
   return settlement(bookExpenses(book), dates, book.settled);
 }
+
+export function purgeDeletedExpenses(book) {
+  const deleted = new Set(book.deletedExpenses ?? []);
+  const purged = [];
+  const expenses = [];
+  for (const row of book.expenses) {
+    if (deleted.has(row.id)) {
+      purged.push(row);
+    } else {
+      expenses.push(row);
+    }
+  }
+  return {
+    book: { ...book, expenses, deletedExpenses: deleted },
+    purged,
+  };
+}
