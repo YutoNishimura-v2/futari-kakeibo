@@ -107,15 +107,15 @@ test('writeReport drops mask and Authorization lines before publishing logs', ()
   const logDir = join(dir, 'logs');
   const outDir = join(dir, 'failure');
   mkdirSync(logDir);
-  const token = 'FAKE';
-  const basic = 'eC1hY2Nlc3MtdG9rZW46RkFLRQ==';
+  const sample = 'FAKE-CI-TOKEN-NOT-A-SECRET';
+  const basic = Buffer.from(`x-access-token:${sample}`).toString('base64');
   writeFileSync(
     join(logDir, 'publish.log'),
     [
       `::add-mask::${basic}`,
       'Authorization: Basic eC1h',
       'error: trace header Authorization: Custom fake-secret',
-      `https://x-access-token:${token}@github.com/o/r.git`,
+      `https://x-access-token:${sample}@github.com/o/r.git`,
       `error: leaked ${basic} in debug`,
       'remote: Permission denied',
     ].join('\r\n'),
@@ -133,7 +133,7 @@ test('writeReport drops mask and Authorization lines before publishing logs', ()
     const output = readFileSync(join(outDir, file), 'utf8');
     assert.doesNotMatch(output, /::add-mask::|Authorization:|trace header/i, file);
     assert.ok(!output.includes(basic), `${file} must not contain the encoded token`);
-    assert.ok(!output.includes(token), `${file} must not contain the raw token`);
+    assert.ok(!output.includes(sample), `${file} must not contain the raw token`);
     assert.match(output, /Permission denied/, file);
     assert.match(output, /error: leaked \[REDACTED\] in debug/, file);
   }

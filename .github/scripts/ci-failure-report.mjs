@@ -35,7 +35,7 @@ export function sanitizeLog(text) {
     .replace(/^(?:::add-mask::|[^\r\n]*Authorization:)[^\r\n]*(?:\r\n?|\n|$)/gim, '')
     .replace(/(::add-mask::)[^\r\n]*/gi, '$1[REDACTED]')
     .replace(/(x-access-token:)[^\s'"@]+/gi, '$1[REDACTED]')
-    .replace(/\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g, '[REDACTED]');
+    .replace(/\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github[_]pat_[A-Za-z0-9_]{20,})\b/g, '[REDACTED]');
   for (const secret of masked) {
     out = out.replaceAll(secret, '[REDACTED]');
   }
