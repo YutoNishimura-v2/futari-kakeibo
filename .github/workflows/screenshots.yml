@@ -35,7 +35,7 @@ jobs:
             xcrun simctl bootstatus "$device" -b
             xcrun simctl status_bar "$device" override --time "9:41" --dataNetwork wifi \
               --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 \
-              --batteryState unplugged --batteryLevel 100
+              --batteryState discharging --batteryLevel 100
           } 2>&1 | tee tmp/ci-logs/prepare.log
 
       - name: Build and capture

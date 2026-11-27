@@ -16,6 +16,16 @@ const steps = workflow
   .map((block) => ({ name: /^name: (.+)$/m.exec(block)?.[1], id: /^ {8}id: (.+)$/m.exec(block)?.[1], text: block }));
 const stepNamed = (name) => steps.find((step) => step.name === name);
 
+test('the simulator status bar uses a discharging battery at 100 percent', () => {
+  const step = stepNamed('Prepare project and simulator');
+  assert.ok(step, 'prepare step exists');
+  const statusBar = step.text.replace(/\\\r?\n\s*/g, ' ').match(/xcrun simctl status_bar[^\r\n]+/)?.[0];
+  assert.ok(statusBar, 'the prepare step overrides the simulator status bar');
+  assert.match(statusBar, /--batteryState\s+discharging\b/);
+  assert.match(statusBar, /--batteryLevel\s+100\b/);
+  assert.doesNotMatch(statusBar, /--batteryState\s+['"]?unplugged\b/);
+});
+
 test('every logged step tees its output to tmp/ci-logs and keeps the exit code', () => {
   for (const { id, title } of LOGGED_STEPS) {
     const step = stepNamed(title);
