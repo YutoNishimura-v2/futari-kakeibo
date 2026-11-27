@@ -19,68 +19,73 @@ jobs:
           persist-credentials: false
 
       - name: Prepare project and simulator
+        id: prepare
         shell: bash
         run: |
-          if ! command -v xcodegen >/dev/null; then
-            HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
-          fi
-          xcodegen generate
-          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
-          device="$(xcrun simctl list devices available -j | python3 -c '
-          import json, sys
-          runtimes = json.load(sys.stdin)["devices"]
-          for runtime in sorted((r for r in runtimes if ".iOS-" in r),
-                                key=lambda r: tuple(map(int, r.split(".iOS-")[1].split("-"))),
-                                reverse=True):
-              phones = [d for d in runtimes[runtime] if d["name"].startswith("iPhone")]
-              if phones:
-                  print(next((d for d in phones if d["name"] == "iPhone 17 Pro"), phones[0])["udid"])
-                  break
-          else:
-              sys.exit("No available iPhone simulator")
-          ')"
-          echo "SIMULATOR_ID=$device" >> "$GITHUB_ENV"
-          xcrun simctl bootstatus "$device" -b
-          xcrun simctl status_bar "$device" override --time "9:41" --dataNetwork wifi \
-            --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 \
-            --batteryState unplugged --batteryLevel 100
+          set -eo pipefail
+          mkdir -p tmp/ci-logs
+          {
+            if ! command -v xcodegen >/dev/null; then
+              HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+            fi
+            xcodegen generate
+            defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+            device="$(xcrun simctl list devices available -j | python3 .github/scripts/pick-simulator.py)"
+            echo "SIMULATOR_ID=$device" >> "$GITHUB_ENV"
+            xcrun simctl bootstatus "$device" -b
+            xcrun simctl status_bar "$device" override --time "9:41" --dataNetwork wifi \
+              --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 \
+              --batteryState unplugged --batteryLevel 100
+          } 2>&1 | tee tmp/ci-logs/prepare.log
 
       - name: Build and capture
+        id: capture
         shell: bash
         run: |
-          mkdir -p tmp
+          set -eo pipefail
+          mkdir -p tmp/ci-logs
           xcodebuild test -project FutariKakeibo.xcodeproj -scheme FutariScreenshots \
             -configuration Debug -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
             -parallel-testing-enabled NO -resultBundlePath tmp/screenshots.xcresult \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tee tmp/xcodebuild-screenshots.log
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee tmp/ci-logs/capture.log
 
       - name: Export screenshot attachments
+        id: export
         shell: bash
         run: |
-          xcrun xcresulttool export attachments --path tmp/screenshots.xcresult --output-path tmp/attachments
-          python3 .github/scripts/export-screenshots.py
-
-      - name: Keep the build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: xcodebuild-screenshots
-          path: tmp/xcodebuild-screenshots.log
-          if-no-files-found: ignore
+          set -eo pipefail
+          mkdir -p tmp/ci-logs
+          {
+            xcrun xcresulttool export attachments --path tmp/screenshots.xcresult --output-path tmp/attachments
+            python3 .github/scripts/export-screenshots.py
+          } 2>&1 | tee tmp/ci-logs/export.log
 
       - name: Publish the screenshot branch
+        id: publish
         shell: bash
-        working-directory: tmp/ci-shots
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git init --initial-branch=ci-shots
-          git add -- *.png index.md
-          git -c user.name='github-actions[bot]' \
-              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-              commit -m "Screenshots for $GITHUB_SHA"
-          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
-          basic="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
-          echo "::add-mask::$basic"
-          git -c "http.extraHeader=Authorization: Basic $basic" \
-              push --force origin HEAD:refs/heads/ci-shots
+          set -eo pipefail
+          mkdir -p tmp/ci-logs
+          bash .github/scripts/publish-ci-shots.sh tmp/ci-shots 2>&1 | tee tmp/ci-logs/publish.log
+
+      - name: Keep the step logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs
+          path: tmp/ci-logs
+          if-no-files-found: ignore
+
+      - name: Publish the failure report
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STEPS_JSON: ${{ toJSON(steps) }}
+        run: |
+          set -eo pipefail
+          rm -rf tmp/ci-failure
+          node .github/scripts/ci-failure-report.mjs tmp/ci-failure
+          bash .github/scripts/publish-ci-shots.sh tmp/ci-failure

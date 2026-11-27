@@ -43,10 +43,16 @@ def main() -> None:
     if missing := expected - shots.keys():
         raise SystemExit(f"Missing screenshots: {', '.join(sorted(missing))}")
     output.mkdir()
+    run_url = (
+        f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}"
+        f"/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+    )
     index = [
-        "# ふたりの家計簿",
+        f"成功 {os.environ['GITHUB_SHA']}",
         "",
-        f"撮影元のコミット `{os.environ['GITHUB_SHA']}`",
+        f"実行: {run_url}",
+        "",
+        "# ふたりの家計簿",
         "",
     ]
     for style, appearance in STYLES.items():

@@ -10,10 +10,10 @@
       --bg-grouped: #F2F2F7;
       --bg-card: #FFFFFF;
       --bg-nav: rgba(249, 249, 249, 0.94);
-      --separator: rgba(60, 60, 67, 0.29);
+      --separator: rgba(60, 60, 67, 0.24);
       --label: #000000;
-      --secondary-label: rgba(60, 60, 67, 0.6);
-      --disclosure: rgba(60, 60, 67, 0.3);
+      --secondary-label: rgba(60, 60, 67, 0.65);
+      --disclosure: rgba(60, 60, 67, 0.35);
       --tint: #007AFF;
       --tone-ok: rgb(23, 73, 56);
       --tone-over: rgb(166, 27, 41);
@@ -60,9 +60,12 @@
     }
     .list {
       padding: 14px 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
     .section-header {
-      padding: 0 16px 6px;
+      padding: 0 12px 6px;
       font-size: 13px;
       line-height: 18px;
       color: var(--secondary-label);
@@ -72,8 +75,23 @@
       border-radius: 10px;
       overflow: hidden;
     }
-    .row {
+    .month-row {
       padding: 10px 16px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .month-menu {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--tint);
+      font-size: 17px;
+      font-weight: 600;
+    }
+    .row {
+      padding: 11px 16px;
       min-height: 44px;
       display: flex;
       align-items: center;
@@ -82,64 +100,98 @@
     }
     .progress-stack {
       flex: 1;
-      padding: 3px 0;
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 7px;
     }
-    .yen-row {
-      flex: 1;
+    .top-line {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 8px;
     }
-    .row-title {
-      font-size: 17px;
-      line-height: 22px;
-      font-weight: 400;
+    .title-with-icon {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 21px;
     }
-    .row-value {
-      font-size: 17px;
-      line-height: 22px;
+    .title-plain {
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 21px;
+    }
+    .cat-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+    .budget-limit {
+      font-size: 14px;
+      line-height: 19px;
       color: var(--secondary-label);
       font-variant-numeric: tabular-nums;
     }
-    .subheadline {
-      font-size: 15px;
-      line-height: 20px;
-      font-variant-numeric: tabular-nums;
+    .bar-line {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    .headline {
-      font-size: 17px;
-      line-height: 22px;
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-    }
-    .footnote {
-      font-size: 13px;
-      line-height: 18px;
-      font-variant-numeric: tabular-nums;
-    }
-    .tone-ok { color: var(--tone-ok); }
-    .tone-over { color: var(--tone-over); }
     .progress-track {
-      width: 100%;
-      height: 4px;
-      border-radius: 2px;
+      flex: 1;
+      height: 8px;
+      border-radius: 4px;
       background: var(--track);
       overflow: hidden;
     }
     .progress-fill {
       height: 100%;
-      border-radius: 2px;
+      border-radius: 4px;
     }
+    .pct-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 16px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .bottom-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .headline {
+      font-size: 17px;
+      line-height: 22px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .subheadline {
+      font-size: 14px;
+      line-height: 19px;
+      color: var(--secondary-label);
+      font-variant-numeric: tabular-nums;
+    }
+    .tone-ok { color: var(--tone-ok); }
+    .tone-over { color: var(--tone-over); }
     .tone-ok-bg { background: var(--tone-ok); }
     .tone-over-bg { background: var(--tone-over); }
     .separator {
       height: 0.5px;
       margin-left: 16px;
       background: var(--separator);
+    }
+    .disclosure-row {
+      padding: 12px 16px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 16px;
+      line-height: 21px;
     }
     .chevron-muted { color: var(--disclosure); flex-shrink: 0; }
   </style>
@@ -156,98 +208,94 @@
   </header>
 
   <main class="list">
-    <div class="section-header">2026年6月</div>
     <section class="card">
-      <div class="row">
-        <div class="progress-stack">
-          <div class="yen-row">
-            <span class="row-title">予算の合計</span>
-            <span class="row-value">予算 22,000円</span>
-          </div>
-          <div class="subheadline">支払済 13,020円</div>
-          <div class="headline tone-ok">残り 8,980円</div>
-          <div class="progress-track"><div class="progress-fill tone-ok-bg" style="width: 59.18%"></div></div>
-          <div class="footnote tone-ok">残り割合 40%</div>
+      <div class="month-row">
+        <div class="month-menu">
+          <span>2026年6月</span>
+          <svg width="12" height="8" viewBox="0 0 11 7" fill="none" aria-hidden="true">
+            <path d="M1 1.25L5.5 5.75L10 1.25" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </div>
       </div>
       <div class="separator"></div>
-
       <div class="row">
         <div class="progress-stack">
-          <div class="yen-row">
-            <span class="row-title">食料品</span>
-            <span class="row-value">予算 18,000円</span>
+          <div class="top-line">
+            <span class="title-plain">予算の合計</span>
+            <span class="budget-limit">予算 22,000円</span>
           </div>
-          <div class="subheadline">支払済 8,420円</div>
-          <div class="headline tone-ok">残り 9,580円</div>
-          <div class="progress-track"><div class="progress-fill tone-ok-bg" style="width: 46.78%"></div></div>
-          <div class="footnote tone-ok">残り割合 53%</div>
-        </div>
-        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
-          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="separator"></div>
-
-      <div class="row">
-        <div class="progress-stack">
-          <div class="yen-row">
-            <span class="row-title">外食</span>
-            <span class="row-value">予算 4,000円</span>
+          <div class="bar-line">
+            <div class="progress-track"><div class="progress-fill tone-ok-bg" style="width: 59.18%"></div></div>
+            <span class="pct-label tone-ok">使用 59%（残り 41%）</span>
           </div>
-          <div class="subheadline">支払済 4,600円</div>
-          <div class="headline tone-over">超過 600円</div>
-          <div class="progress-track"><div class="progress-fill tone-over-bg" style="width: 100%"></div></div>
-          <div class="footnote tone-over">残り割合 -15%</div>
+          <div class="bottom-line">
+            <span class="headline tone-ok">残り 8,980円</span>
+            <span class="subheadline">支払済 13,020円</span>
+          </div>
         </div>
-        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
-          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
       </div>
-      <div class="separator"></div>
+    </section>
 
-      <div class="row">
-        <div class="yen-row"><span class="row-title">日用品</span><span class="row-value">未設定</span></div>
-        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
-          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+    <section>
+      <div class="section-header">設定済みの費目</div>
+      <div class="card">
+        <div class="row">
+          <div class="progress-stack">
+            <div class="top-line">
+              <div class="title-with-icon">
+                <svg class="cat-icon tone-ok" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M3 4H5.2L6.8 12.5H15.2L16.8 6.5H6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                  <circle cx="7.5" cy="15.5" r="1.3" fill="currentColor"/>
+                  <circle cx="14.5" cy="15.5" r="1.3" fill="currentColor"/>
+                </svg>
+                <span>食料品</span>
+              </div>
+              <span class="budget-limit">予算 18,000円</span>
+            </div>
+            <div class="bar-line">
+              <div class="progress-track"><div class="progress-fill tone-ok-bg" style="width: 46.78%"></div></div>
+              <span class="pct-label tone-ok">使用 47%（残り 53%）</span>
+            </div>
+            <div class="bottom-line">
+              <span class="headline tone-ok">残り 9,580円</span>
+              <span class="subheadline">支払済 8,420円</span>
+            </div>
+          </div>
+          <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+            <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="separator"></div>
+        <div class="row">
+          <div class="progress-stack">
+            <div class="top-line">
+              <div class="title-with-icon">
+                <svg class="cat-icon tone-over" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M6.5 3.5V9M4.5 3.5V7C4.5 8.1 5.4 9 6.5 9C7.6 9 8.5 8.1 8.5 7V3.5M6.5 9V16.5M14 3.5V16.5M14 3.5C15.4 3.5 16 5.2 16 7.5C16 9.5 15.2 10.5 14 10.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>外食</span>
+              </div>
+              <span class="budget-limit">予算 4,000円</span>
+            </div>
+            <div class="bar-line">
+              <div class="progress-track"><div class="progress-fill tone-over-bg" style="width: 100%"></div></div>
+              <span class="pct-label tone-over">超過 15%</span>
+            </div>
+            <div class="bottom-line">
+              <span class="headline tone-over">超過 600円</span>
+              <span class="subheadline">支払済 4,600円</span>
+            </div>
+          </div>
+          <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
+            <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
       </div>
-      <div class="separator"></div>
+    </section>
 
-      <div class="row">
-        <div class="yen-row"><span class="row-title">住居</span><span class="row-value">未設定</span></div>
-        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
-          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="separator"></div>
-
-      <div class="row">
-        <div class="yen-row"><span class="row-title">水道光熱</span><span class="row-value">未設定</span></div>
-        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
-          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="separator"></div>
-
-      <div class="row">
-        <div class="yen-row"><span class="row-title">交通</span><span class="row-value">未設定</span></div>
-        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
-          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="separator"></div>
-
-      <div class="row">
-        <div class="yen-row"><span class="row-title">娯楽</span><span class="row-value">未設定</span></div>
-        <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
-          <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="separator"></div>
-
-      <div class="row">
-        <div class="yen-row"><span class="row-title">その他</span><span class="row-value">未設定</span></div>
+    <section class="card">
+      <div class="disclosure-row">
+        <span>予算を追加する費目（6）</span>
         <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
           <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>

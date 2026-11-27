@@ -386,6 +386,8 @@ test('home leads with the selected Japan month settlement in its largest font', 
   assert.match(home, /let currentMonth = Month\(containing: ScreenshotDemo\.day \?\? Month\.localDay\(context\.date\)\)\s*let month = selectedMonth \?\? currentMonth/);
   assert.match(home, /List \{\s*if let snapshot = ledger\.snapshot \{\s*if snapshot\.expenses\.isEmpty && snapshot\.settlementDates\[month\] == nil \{\s*FirstExpensePrompt\([^\n]+\)[\s\S]*?\} else \{\s*settlementHeader\(month: month, currentMonth: currentMonth, snapshot: snapshot\)/);
   assert.match(header, /return layout \{\s*NavigationLink \{[\s\S]*?\} label: \{\s*VStack\([^\n]+\) \{\s*Text\(settlementTitle\(in: month, snapshot: snapshot\)\)\s*\.font\(\.largeTitle\.weight\(\.bold\)\)/);
+  assert.doesNotMatch(header, /settlementTitle\([^)]*\)\)[\s\S]*?\.lineLimit\(/);
+  assert.match(header, /\.fixedSize\(horizontal: false, vertical: true\)/);
   const styles = Array.from(home.matchAll(/\.font\(\.(\w+)/g), ([, style]) => style);
   assert.equal(styles.filter(style => style === 'largeTitle').length, 1);
   assert.ok(styles.every(style => ['largeTitle', 'headline', 'subheadline', 'footnote'].includes(style)));
@@ -407,7 +409,9 @@ test('an empty book can open either the first expense form or the Pro budget set
   const budget = source('FutariKakeibo/ProSettings.swift');
   const prompt = app.slice(app.indexOf('struct FirstExpensePrompt: View'), app.indexOf('private enum MonthlySettlement'));
   assert.match(app, /if snapshot\.expenses\.isEmpty && snapshot\.settlementDates\[month\] == nil \{\s*FirstExpensePrompt\(canRecord: ledger\.canStartRecording, record: startExpense\)/);
-  assert.match(app, /FirstExpensePrompt\([^\n]+\)\s*if ledger\.plan\.allowsProFeatures \{\s*NavigationLink \{\s*BudgetSettings\(ledger: ledger, book: snapshot\.book, month: month\)/);
+  const home = app.slice(app.indexOf('private struct Home: View'), app.indexOf('private struct HomeBudgetSummary'));
+  assert.match(home, /if let snapshot = ledger\.snapshot, ledger\.plan\.allowsProFeatures \{[\s\S]*?BudgetSettings\(ledger: ledger, book: snapshot\.book, month: month\)[\s\S]*?if limits\.isEmpty && snapshot\.expenses\.isEmpty \{\s*Text\("費目別予算を設定"\)/);
+  assert.equal((home.match(/Text\("費目別予算を設定"\)/g) ?? []).length, 1);
   const budgetSettings = budget.slice(budget.indexOf('struct BudgetSettings'), budget.indexOf('struct BudgetProgressRow'));
   assert.match(budgetSettings, /snapshot\.book == book \{\s*budgetRows\(snapshot\)/);
   assert.doesNotMatch(budgetSettings, /expenses\.isEmpty/);
@@ -464,7 +468,7 @@ test('Swift puts the configured budget total above categories and shows accessib
   assert.match(budget, /ProgressView\(value: progress\.progress\)/);
   assert.match(budget, /"予算 \\\(progress\.limit\.yen\)"/);
   assert.match(budget, /"支払済 \\\(progress\.spent\.yen\)"/);
-  assert.match(budget, /Text\(progress\.displayPercentage\.map[\s\S]*?\.foregroundStyle\(tone\)/);
+  assert.match(budget, /Text\(progress\.percentageCaption\)[\s\S]*?\.foregroundStyle\(tone\)/);
 
   const colors = [...budget.matchAll(/Color\(red: ([\d.]+)(?: \/ (255))?, green: ([\d.]+) \/ 255, blue: ([\d.]+) \/ 255\)/g)];
   assert.equal(colors.length, 4);
@@ -476,6 +480,35 @@ test('Swift puts the configured budget total above categories and shows accessib
     const background = luminance(index % 2 === 0 ? [0.2, 0.2, 0.2] : [0.9, 0.9, 0.9]);
     assert.ok((Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05) >= 4.5);
   }
+});
+
+test('budget progress has room to wrap alongside a full-width bar at accessibility sizes', () => {
+  const budget = source('FutariKakeibo/ProSettings.swift');
+  const row = budget.slice(budget.indexOf('private struct BudgetProgressRow'), budget.indexOf('private struct BudgetEditor'));
+  assert.doesNotMatch(row, /\.fixedSize\(\s*\)/);
+  assert.match(row, /typeSize\.isAccessibilitySize[\s\S]*?AnyLayout\(VStackLayout/);
+});
+
+test('paywall price anchors use storefront currency', () => {
+  const paywall = source('FutariKakeibo/ProPaywall.swift');
+  const anchor = paywall.slice(paywall.indexOf('private var yearlyMonthlyAnchor'), paywall.indexOf('private func optionRow'));
+  assert.match(anchor, /\.formatted\(product\.priceFormatStyle\)/);
+});
+
+test('paywall demo actions give feedback without StoreKit', () => {
+  const paywall = source('FutariKakeibo/ProPaywall.swift');
+  for (const action of ['buy', 'restore']) {
+    const start = paywall.indexOf(`private func ${action}()`);
+    assert.match(paywall.slice(start), /^private func \w+\(\) async \{\s*if ScreenshotDemo\.isEnabled \{\s*status = "[^"]+"\s*return/);
+  }
+});
+
+test('both budget surfaces round usage once and use its complement for ordinary remaining percentages', () => {
+  const budget = source('FutariKakeibo/ProSettings.swift');
+  const app = source('FutariKakeibo/FutariKakeiboApp.swift');
+  assert.match(budget, /var percentageCaption: String[\s\S]*?let used = \(percentageUsed \?\? 0\)\.rounded\(\)[\s\S]*?let remaining = spent < 0 \? .* : 100 - used/);
+  assert.match(budget, /Text\(progress\.percentageCaption\)/);
+  assert.match(app, /struct HomeBudgetSummary[\s\S]*?Text\(progress\.percentageCaption\)/);
 });
 
 test('the paywall explains shared two-person value, all major Pro features and free sharing before plans or purchase', () => {
@@ -497,7 +530,7 @@ test('the paywall explains shared two-person value, all major Pro features and f
     const offset = paywall.indexOf(benefit);
     assert.ok(offset >= 0 && offset < firstPrice, benefit);
   }
-  assert.ok(paywall.indexOf('Button(purchaseButtonTitle)') > firstPrice);
+  assert.ok(paywall.indexOf('Text(purchaseButtonTitle)') > firstPrice);
   assert.match(paywall, /isEligibleForIntroOffer/);
   assert.match(paywall, /selection == \.yearly && yearlyIntroEligible \? "14日間無料で始める" : "購入手続きへ"/);
   assert.match(paywall, /return products\[option\]\?\.displayPrice/);
@@ -671,7 +704,8 @@ test('home spending shows matched color swatches without hiding the legend and m
   assert.match(spending, /if showChart, let swatch = swatchColor\(for: category, in: positive\) \{\s*RoundedRectangle\([\s\S]*?\.fill\(swatch\)[\s\S]*?\}\s*YenRow\(title: snapshot\.title\(for: category\), value: totals\[category, default: 0\]\.yen\)/);
   const detail = app.slice(app.indexOf('private struct MonthDetail: View'), app.indexOf('private struct SettlementReview: View'));
   assert.match(detail, /Text\(remaining < 0 \? "超過 \\\(\(-remaining\)\.yen\)" : "残り \\\(remaining\.yen\)"\)\s*\.font\(\.footnote\)\s*\.foregroundStyle\(budgetTone\(overspend: remaining < 0, colorScheme: colorScheme\)\)/);
-  assert.match(app, /YenRow\(\s*title: "今月の予算",[\s\S]*?\.foregroundStyle\(budgetTone\(overspend: progress\.overspend > 0, colorScheme: colorScheme\)\)/);
+  assert.match(app, /let budgetTitle = month == currentMonth \? "今月の予算" : "この月の予算"/);
+  assert.match(app, /YenRow\(\s*title: budgetTitle,[\s\S]*?\.foregroundStyle\(budgetTone\(overspend: progress\.overspend > 0, colorScheme: colorScheme\)\)/);
 });
 
 test('late deleted receipt rows and orphaned recurring rows are hidden and purged while keeping deletion markers', () => {

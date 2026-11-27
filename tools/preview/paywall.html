@@ -10,12 +10,14 @@
       --bg-grouped: #F2F2F7;
       --bg-card: #FFFFFF;
       --bg-nav: rgba(249, 249, 249, 0.94);
-      --separator: rgba(60, 60, 67, 0.29);
+      --separator: rgba(60, 60, 67, 0.24);
       --label: #000000;
-      --secondary-label: rgba(60, 60, 67, 0.6);
-      --disabled-label: rgba(60, 60, 67, 0.3);
-      --disclosure: rgba(60, 60, 67, 0.3);
+      --secondary-label: rgba(60, 60, 67, 0.65);
+      --disclosure: rgba(60, 60, 67, 0.35);
       --tint: #007AFF;
+      --cta: #005BBF;
+      --tint-soft: rgba(0, 122, 255, 0.08);
+      --ok-tone: rgb(23, 73, 56);
     }
     * { box-sizing: border-box; }
     html, body {
@@ -46,7 +48,7 @@
       display: flex;
       align-items: center;
       color: var(--tint);
-      font-size: 17px;
+      font-size: 16px;
     }
     .nav-title {
       margin: 0;
@@ -56,21 +58,21 @@
       letter-spacing: -0.02em;
     }
     .list {
-      padding: 12px 16px 20px;
+      padding: 10px 16px 14px;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 10px;
     }
     .section-header {
-      padding: 0 16px 6px;
-      font-size: 13px;
-      line-height: 18px;
+      padding: 0 12px 4px;
+      font-size: 12px;
+      line-height: 16px;
       color: var(--secondary-label);
     }
     .section-footer {
-      margin: 6px 16px 0;
-      font-size: 13px;
-      line-height: 18px;
+      margin: 4px 12px 0;
+      font-size: 11.5px;
+      line-height: 15.5px;
       color: var(--secondary-label);
     }
     .card {
@@ -78,19 +80,62 @@
       border-radius: 10px;
       overflow: hidden;
     }
+    .hero-row {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(135deg, rgba(0, 122, 255, 0.08), rgba(0, 122, 255, 0.02));
+    }
+    .hero-icon {
+      color: var(--tint);
+      flex-shrink: 0;
+    }
+    .hero-title {
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 20px;
+      color: var(--label);
+    }
+    .hero-sub {
+      font-size: 12px;
+      line-height: 16px;
+      color: var(--secondary-label);
+      margin-top: 1px;
+    }
+    .feature-row {
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13.5px;
+      line-height: 18px;
+    }
+    .feature-icon {
+      color: var(--tint);
+      flex-shrink: 0;
+    }
     .row {
-      padding: 11px 16px;
-      min-height: 44px;
+      padding: 9px 14px;
+      min-height: 40px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      font-size: 17px;
-      line-height: 22px;
+      gap: 10px;
+      font-size: 15px;
+      line-height: 20px;
+    }
+    .plan-row-selected {
+      background: var(--tint-soft);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
     }
     .separator {
       height: 0.5px;
-      margin-left: 16px;
+      margin-left: 14px;
       background: var(--separator);
     }
     .option-label {
@@ -98,26 +143,95 @@
       align-items: center;
       gap: 10px;
       color: var(--label);
+      min-width: 0;
     }
     .option-icon {
       color: var(--tint);
       flex-shrink: 0;
     }
+    .plan-title-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 20px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: var(--tint);
+      color: #FFFFFF;
+      font-size: 10.5px;
+      font-weight: 700;
+      line-height: 15px;
+      white-space: nowrap;
+    }
+    .plan-anchor {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 16px;
+      color: var(--tint);
+      margin-top: 1px;
+    }
     .option-price {
-      color: var(--secondary-label);
+      color: var(--label);
+      font-size: 16px;
+      font-weight: 700;
       font-variant-numeric: tabular-nums;
       white-space: nowrap;
     }
-    .action-primary {
-      font-weight: 600;
-      color: var(--disabled-label);
-    }
-    .row-semibold {
+    .row .option-price {
+      color: var(--secondary-label);
       font-weight: 600;
     }
-    .action-secondary {
-      font-weight: 400;
-      color: var(--disabled-label);
+    .reassurance {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 17px;
+      color: var(--ok-tone);
+      margin-bottom: 6px;
+    }
+    .cta-primary {
+      width: 100%;
+      height: 48px;
+      border: none;
+      border-radius: 12px;
+      background: var(--cta);
+      color: #FFFFFF;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0, 122, 255, 0.25);
+    }
+    .cta-restore {
+      margin-top: 6px;
+      background: var(--bg-card);
+      border-radius: 10px;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--tint);
+      font-size: 14.5px;
+      font-weight: 500;
+    }
+    .legal-row {
+      padding: 9px 14px;
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 14.5px;
+      line-height: 19px;
     }
     .chevron-muted { color: var(--disclosure); flex-shrink: 0; }
   </style>
@@ -132,30 +246,55 @@
     <section>
       <div class="section-header">Proでできること</div>
       <div class="card">
-        <div class="row row-semibold">1契約で共有家計簿のふたりともProを使えます</div>
+        <div class="hero-row">
+          <svg class="hero-icon" width="26" height="22" viewBox="0 0 24 18" fill="none" aria-hidden="true">
+            <circle cx="9.5" cy="5.5" r="3" fill="currentColor"/>
+            <path d="M3.5 15.5c0-3 2.7-4.8 6-4.8s6 1.8 6 4.8" fill="currentColor"/>
+            <circle cx="16.5" cy="6.5" r="2.3" fill="currentColor"/>
+            <path d="M16.5 11c2.4 0 4.3 1.3 4.5 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <div>
+            <div class="hero-title">1契約で共有家計簿のふたりともProを使えます</div>
+            <div class="hero-sub">iCloudでの共有と同期は無料です。</div>
+          </div>
+        </div>
         <div class="separator"></div>
-        <div class="row">用途に合わせて家計簿を追加する（複数家計簿）</div>
+        <div class="feature-row">
+          <svg class="feature-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M8 1.5V8H14.5" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+          <span>家計簿を追加・費目ごとの予算と残額</span>
+        </div>
         <div class="separator"></div>
-        <div class="row">費目ごとに予算と残額を確認する</div>
+        <div class="feature-row">
+          <svg class="feature-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M3 6.5A5.2 5.2 0 0 1 12.2 4M13 9.5A5.2 5.2 0 0 1 3.8 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>毎月の支出を自動で記録・精算日の通知</span>
+        </div>
         <div class="separator"></div>
-        <div class="row">家賃など毎月の支出を自動で記録する（定期入力）</div>
+        <div class="feature-row">
+          <svg class="feature-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2.5 3.5H4.5L5.8 10.5H12.5L13.8 5.5H5.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>ふたりで共有できる買い物リスト・支出推移グラフ</span>
+        </div>
         <div class="separator"></div>
-        <div class="row">ふたりで共有できる買い物リスト</div>
-        <div class="separator"></div>
-        <div class="row">年間・前月比の支出推移グラフ</div>
-        <div class="separator"></div>
-        <div class="row">CSV書き出し・ホーム画面ウィジェットで予算残額表示</div>
-        <div class="separator"></div>
-        <div class="row">精算日の通知・費目追加・テーマ変更</div>
+        <div class="feature-row">
+          <svg class="feature-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 2.5V10M5 5.5L8 2.5L11 5.5M3 11.5V13.5H13V11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>CSV書き出し・ウィジェット・費目やテーマ変更</span>
+        </div>
       </div>
-      <p class="section-footer">iCloudでの共有と同期は無料です。</p>
     </section>
 
     <section>
       <div class="card">
         <div class="row">
           <div class="option-label">
-            <svg class="option-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <svg class="option-icon" width="19" height="19" viewBox="0 0 20 20" fill="none" aria-hidden="true">
               <circle cx="10" cy="10" r="8.25" stroke="currentColor" stroke-width="1.5"/>
             </svg>
             <span>月額</span>
@@ -163,13 +302,19 @@
           <span class="option-price">480円</span>
         </div>
         <div class="separator"></div>
-        <div class="row">
+        <div class="plan-row-selected">
           <div class="option-label">
-            <svg class="option-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <svg class="option-icon" width="19" height="19" viewBox="0 0 20 20" fill="none" aria-hidden="true">
               <circle cx="10" cy="10" r="8.25" stroke="currentColor" stroke-width="1.5"/>
               <circle cx="10" cy="10" r="4.5" fill="currentColor"/>
             </svg>
-            <span>年額（14日間無料）</span>
+            <div>
+              <div class="plan-title-line">
+                <span>年額（14日間無料）</span>
+                <span class="badge">おすすめ</span>
+              </div>
+              <div class="plan-anchor">実質 月300円（1人あたり月150円）</div>
+            </div>
           </div>
           <span class="option-price">3,600円</span>
         </div>
@@ -178,23 +323,29 @@
       <p class="section-footer">14日間無料でお試し後、年ごとに自動更新 3,600円。無料体験を含め、終了の24時間前までに「設定」→「サブスクリプション」で解約できます。</p>
     </section>
 
-    <section class="card">
-      <div class="row action-primary">14日間無料で始める</div>
-      <div class="separator"></div>
-      <div class="row action-secondary">購入を復元</div>
+    <section>
+      <div class="reassurance">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M8 1.5L13.5 3.8V7.6C13.5 11.1 11.2 13.7 8 14.7C4.8 13.7 2.5 11.1 2.5 7.6V3.8L8 1.5Z" fill="currentColor"/>
+          <path d="M5.5 8L7.2 9.7L10.6 6.3" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>無料体験終了の24時間前までに解約すれば請求されません</span>
+      </div>
+      <button class="cta-primary" type="button">14日間無料で始める</button>
+      <div class="cta-restore">購入を復元</div>
     </section>
 
     <section>
       <div class="section-header">アプリについて</div>
       <div class="card">
-        <div class="row">
+        <div class="legal-row">
           <span>プライバシーポリシー</span>
           <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
             <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </div>
         <div class="separator"></div>
-        <div class="row">
+        <div class="legal-row">
           <span>利用規約</span>
           <svg class="chevron-muted" width="8" height="13" viewBox="0 0 8 13" fill="none" aria-hidden="true">
             <path d="M1.5 1.5L6.5 6.5L1.5 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>

@@ -91,13 +91,6 @@ private struct Home: View {
                     if let snapshot = ledger.snapshot {
                         if snapshot.expenses.isEmpty && snapshot.settlementDates[month] == nil {
                             FirstExpensePrompt(canRecord: ledger.canStartRecording, record: startExpense)
-                            if ledger.plan.allowsProFeatures {
-                                NavigationLink {
-                                    BudgetSettings(ledger: ledger, book: snapshot.book, month: month)
-                                } label: {
-                                    Text("費目別予算を設定").frame(minHeight: 44)
-                                }
-                            }
                         } else {
                             settlementHeader(month: month, currentMonth: currentMonth, snapshot: snapshot)
                         }
@@ -155,33 +148,76 @@ private struct Home: View {
                         NavigationLink {
                             ExpenseDetail(ledger: ledger, book: snapshot.book, expenseID: expense.id)
                         } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(expense.label ?? snapshot.title(for: expense.category))
-                                Text(expense.payerCaption(names: snapshot.names))
+                            let layout = typeSize.isAccessibilitySize
+                                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+                                : AnyLayout(HStackLayout(spacing: 12))
+                            layout {
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: expense.category.systemImage)
+                                        .foregroundStyle(Color.accentColor)
+                                        .frame(width: 24)
+                                        .accessibilityHidden(true)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(expense.label ?? snapshot.title(for: expense.category))
+                                        Text("\(snapshot.title(for: expense.category)) · \(expense.date.formatted(japaneseDate.month().day())) · \(expense.payerCaption(names: snapshot.names))")
+                                            .font(.footnote)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
                                 Text(expense.amount.yen).font(.headline).monospacedDigit()
                             }
                             .frame(minHeight: 44)
                             .accessibilityElement(children: .combine)
                         }
+                        NavigationLink {
+                            MonthDetail(month: month, ledger: ledger, book: snapshot.book)
+                        } label: {
+                            Text(month == currentMonth ? "今月の明細をすべて見る" : "この月の明細をすべて見る")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.accentColor)
+                                .frame(minHeight: 44)
+                        }
+                    }
+                    if let snapshot = ledger.snapshot, ledger.plan.allowsProFeatures {
+                        let budgetTitle = month == currentMonth ? "今月の予算" : "この月の予算"
+                        let limits = snapshot.budgets[month]?.filter({ snapshot.categories.contains($0.key) }) ?? [:]
+                        if !limits.isEmpty,
+                           let totals = try? Ledger.totals(for: snapshot.expenses, in: month),
+                           let progress = try? Ledger.budgetTotal(limits: limits, totals: totals) {
+                            NavigationLink {
+                                BudgetSettings(ledger: ledger, book: snapshot.book, month: month)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    YenRow(
+                                        title: budgetTitle,
+                                        value: progress.overspend > 0 ? "超過 \(progress.overspend.yen)" : "残り \(progress.remaining.yen)"
+                                    )
+                                    .foregroundStyle(budgetTone(overspend: progress.overspend > 0, colorScheme: colorScheme))
+                                    HomeBudgetSummary(progress: progress, colorScheme: colorScheme)
+                                }
+                                .frame(minHeight: 44)
+                            }
+                        } else {
+                            NavigationLink {
+                                BudgetSettings(ledger: ledger, book: snapshot.book, month: month)
+                            } label: {
+                                if limits.isEmpty && snapshot.expenses.isEmpty {
+                                    Text("費目別予算を設定").frame(minHeight: 44)
+                                } else if limits.isEmpty {
+                                    YenRow(title: budgetTitle, value: "設定する")
+                                        .frame(minHeight: 44)
+                                } else {
+                                    Text("予算の合計を表示できません").frame(minHeight: 44)
+                                }
+                            }
+                        }
                     }
                     if let snapshot = ledger.snapshot, !snapshot.expenses.isEmpty {
-                        HomeSpending(month: month, snapshot: snapshot)
-                    }
-                    if let snapshot = ledger.snapshot, ledger.plan.allowsProFeatures,
-                       let limits = snapshot.budgets[month]?.filter({ snapshot.categories.contains($0.key) }),
-                       !limits.isEmpty,
-                       let totals = try? Ledger.totals(for: snapshot.expenses, in: month),
-                       let progress = try? Ledger.budgetTotal(limits: limits, totals: totals) {
-                        NavigationLink {
-                            BudgetSettings(ledger: ledger, book: snapshot.book, month: month)
-                        } label: {
-                            YenRow(
-                                title: "今月の予算",
-                                value: progress.overspend > 0 ? "超過 \(progress.overspend.yen)" : "残り \(progress.remaining.yen)"
-                            )
-                            .foregroundStyle(budgetTone(overspend: progress.overspend > 0, colorScheme: colorScheme))
-                            .frame(minHeight: 44)
+                        if !ledger.plan.allowsProFeatures {
+                            ProLock("費目別予算", ledger: ledger)
                         }
+                        HomeSpending(month: month, snapshot: snapshot)
                     }
                 }
                 .onChange(of: currentMonth) { _, _ in ledger.refresh() }
@@ -233,9 +269,7 @@ private struct Home: View {
     }
 
     private func settlementHeader(month: Month, currentMonth: Month, snapshot: LedgerSnapshot) -> some View {
-        let layout = typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
+        let layout = VStackLayout(alignment: .leading, spacing: 8)
         return layout {
             NavigationLink {
                 MonthDetail(month: month, ledger: ledger, book: snapshot.book)
@@ -256,19 +290,33 @@ private struct Home: View {
             }
             .accessibilityIdentifier("home-month")
 
-            Menu {
-                Button("前の月") { selectedMonth = month.advanced(by: -1) }
-                Button("次の月") { selectedMonth = month.advanced(by: 1) }
-                if month != currentMonth {
-                    Button("今月に戻る") { selectedMonth = nil }
+            let metadataLayout = typeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+                : AnyLayout(HStackLayout(spacing: 8))
+            metadataLayout {
+                Label(
+                    ledger.isBookShared || snapshot.book.isGuest
+                        ? "\(snapshot.names.first)・\(snapshot.names.second) で共有中"
+                        : "\(snapshot.names.first)・\(snapshot.names.second)",
+                    systemImage: ledger.isBookShared || snapshot.book.isGuest ? "person.2.fill" : "person.2"
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
+                Menu {
+                    Button("前の月") { selectedMonth = month.advanced(by: -1) }
+                    Button("次の月") { selectedMonth = month.advanced(by: 1) }
+                    if month != currentMonth {
+                        Button("今月に戻る") { selectedMonth = nil }
+                    }
+                } label: {
+                    Label(month.start.formatted(japaneseDate.year().month()), systemImage: "chevron.down")
+                        .font(.subheadline)
+                        .frame(minWidth: 44, minHeight: 44)
                 }
-            } label: {
-                Label(month.start.formatted(japaneseDate.year().month()), systemImage: "chevron.down")
-                    .font(.subheadline)
-                    .frame(minWidth: 44, minHeight: 44)
+                .buttonStyle(.borderless)
+                .accessibilityHint("表示する月を変更します")
             }
-            .buttonStyle(.borderless)
-            .accessibilityHint("表示する月を変更します")
         }
         .padding(.vertical, 8)
     }
@@ -289,8 +337,39 @@ private struct Home: View {
     }
 }
 
+private struct HomeBudgetSummary: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let progress: BudgetProgress
+    let colorScheme: ColorScheme
+
+    private var tone: Color {
+        budgetTone(overspend: progress.overspend > 0, colorScheme: colorScheme)
+    }
+
+    var body: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(spacing: 8))
+        return VStack(alignment: .leading, spacing: 6) {
+            ProgressView(value: progress.progress)
+                .tint(tone)
+                .accessibilityHidden(true)
+            layout {
+                Text(progress.percentageCaption)
+                    .foregroundStyle(tone)
+                if !typeSize.isAccessibilitySize { Spacer() }
+                Text("予算 \(progress.limit.yen)")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.footnote)
+            .monospacedDigit()
+        }
+    }
+}
+
 private struct HomeSpending: View {
     @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var expanded = true
     let month: Month
     let snapshot: LedgerSnapshot
     private let chartPalette: [Color] = [
@@ -330,7 +409,7 @@ private struct HomeSpending: View {
     private func breakdown(categories: [Category], totals: [Category: Int], total: Int) -> some View {
         let positive = categories.filter { totals[$0, default: 0] > 0 }
         let showChart = !typeSize.isAccessibilitySize && !positive.isEmpty && totals.values.allSatisfy { $0 >= 0 }
-        return DisclosureGroup {
+        return DisclosureGroup(isExpanded: $expanded) {
             if showChart {
                 ZStack {
                     Chart(positive, id: \.self) { category in
@@ -908,6 +987,20 @@ extension Category {
         case .transport: return "交通"
         case .leisure: return "娯楽"
         default: return "その他"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .groceries: return "cart.fill"
+        case .dining: return "fork.knife"
+        case .household: return "basket.fill"
+        case .housing: return "house.fill"
+        case .utilities: return "bolt.fill"
+        case .transport: return "tram.fill"
+        case .leisure: return "sparkles"
+        case .other: return "ellipsis.circle.fill"
+        default: return "tag.fill"
         }
     }
 }

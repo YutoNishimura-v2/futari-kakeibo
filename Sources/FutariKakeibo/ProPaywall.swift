@@ -18,19 +18,26 @@ struct ProPaywall: View {
         NavigationStack {
             List {
                 Section {
-                    Text("1契約で共有家計簿のふたりともProを使えます")
-                        .fontWeight(.semibold)
-                    Text("用途に合わせて家計簿を追加する（複数家計簿）")
-                    Text("費目ごとに予算と残額を確認する")
-                    Text("家賃など毎月の支出を自動で記録する（定期入力）")
-                    Text("ふたりで共有できる買い物リスト")
-                    Text("年間・前月比の支出推移グラフ")
-                    Text("CSV書き出し・ホーム画面ウィジェットで予算残額表示")
-                    Text("精算日の通知・費目追加・テーマ変更")
+                    HStack(spacing: 12) {
+                        Image(systemName: "person.2.fill")
+                            .font(.title2)
+                            .foregroundStyle(Color.accentColor)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("1契約で共有家計簿のふたりともProを使えます")
+                                .font(.headline)
+                            Text("iCloudでの共有と同期は無料です。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                    featureRow("家計簿を追加・費目ごとの予算と残額", systemImage: "chart.pie.fill")
+                    featureRow("毎月の支出を自動で記録・精算日の通知", systemImage: "repeat.circle.fill")
+                    featureRow("ふたりで共有できる買い物リスト・支出推移グラフ", systemImage: "cart.fill")
+                    featureRow("CSV書き出し・ウィジェット・費目やテーマ変更", systemImage: "square.and.arrow.up.fill")
                 } header: {
                     Text("Proでできること")
-                } footer: {
-                    Text("iCloudでの共有と同期は無料です。")
                 }
                 Section {
                     ForEach(ProProduct.allCases, id: \.self) { option in
@@ -53,13 +60,27 @@ struct ProPaywall: View {
                         .accessibilityIdentifier("purchase-terms")
                 }
                 Section {
-                    Button(purchaseButtonTitle) { Task { await buy() } }
-                        .fontWeight(.semibold)
-                        .frame(minHeight: 44)
-                        .disabled(busy || products[selection] == nil || !ledger.canPurchasePro)
+                    if selection == .yearly && yearlyIntroEligible {
+                        Label("無料体験終了の24時間前までに解約すれば請求されません", systemImage: "checkmark.shield.fill")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(.primary)
+                    }
+                    Button {
+                        Task { await buy() }
+                    } label: {
+                        Text(purchaseButtonTitle)
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(red: 0, green: 91.0 / 255, blue: 191.0 / 255))
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+                    .listRowBackground(Color.clear)
+                    .disabled(busy || (!ScreenshotDemo.isEnabled && (products[selection] == nil || !ledger.canPurchasePro)))
                     Button("購入を復元") { Task { await restore() } }
-                        .frame(minHeight: 44)
-                        .disabled(busy || ScreenshotDemo.isEnabled)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .foregroundStyle(Color.accentColor)
+                        .disabled(busy)
                     if busy { ProgressView("購入情報を確認中") }
                     if let status { Text(status).font(.footnote).foregroundStyle(.secondary) }
                 }
@@ -74,17 +95,58 @@ struct ProPaywall: View {
         }
     }
 
+    private func featureRow(_ text: String, systemImage: String) -> some View {
+        Label {
+            Text(text).font(.subheadline)
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(Color.accentColor)
+        }
+    }
+
+    private var yearlyMonthlyAnchor: (perMonth: String, perPerson: String)? {
+        if let demo = ScreenshotDemo.price(for: .yearly) {
+            return ((demo / 12).yen, (demo / 24).yen)
+        }
+        guard let product = products[.yearly], product.price > 0 else { return nil }
+        return (
+            (product.price / 12).formatted(product.priceFormatStyle),
+            (product.price / 24).formatted(product.priceFormatStyle)
+        )
+    }
+
     private func optionRow(_ option: ProProduct) -> some View {
         let title = option == .yearly && yearlyIntroEligible ? "年額（14日間無料）" : option.title
         return Button {
             selection = option
         } label: {
-            LabeledContent {
+            HStack(spacing: 10) {
+                Image(systemName: selection == option ? "largecircle.fill.circle" : "circle")
+                    .foregroundStyle(Color.accentColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(title)
+                            .foregroundStyle(.primary)
+                        if option == .yearly {
+                            Text("おすすめ")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.accentColor)
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+                        }
+                    }
+                    if option == .yearly, let anchor = yearlyMonthlyAnchor {
+                        Text("実質 月\(anchor.perMonth)（1人あたり月\(anchor.perPerson)）")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                Spacer(minLength: 8)
                 Text(price(for: option) ?? (loading ? "読み込み中" : "価格未取得"))
-                    .foregroundStyle(.secondary)
-            } label: {
-                Label(title, systemImage: selection == option ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(.primary)
+                    .font(.headline)
+                    .monospacedDigit()
+                    .foregroundStyle(selection == option ? .primary : .secondary)
             }
             .frame(minHeight: 44)
             .contentShape(Rectangle())
@@ -144,7 +206,11 @@ struct ProPaywall: View {
     }
 
     private func buy() async {
-        guard !busy, let product = products[selection] else { return }
+        if ScreenshotDemo.isEnabled {
+            status = "プレビューでは購入できません"
+            return
+        }
+        guard !busy, ledger.canPurchasePro, let product = products[selection] else { return }
         busy = true
         status = nil
         defer { busy = false }
@@ -158,6 +224,10 @@ struct ProPaywall: View {
     }
 
     private func restore() async {
+        if ScreenshotDemo.isEnabled {
+            status = "プレビューでは購入を復元できません"
+            return
+        }
         guard !busy else { return }
         busy = true
         status = nil

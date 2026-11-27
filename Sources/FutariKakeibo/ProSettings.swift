@@ -57,7 +57,10 @@ struct BudgetSettings: View {
     @ObservedObject var ledger: CloudLedger
     let book: Book
     let month: Month
+    @State private var selectedMonth: Month?
     @State private var copyFailed = false
+
+    private var activeMonth: Month { selectedMonth ?? month }
 
     var body: some View {
         List {
@@ -75,15 +78,33 @@ struct BudgetSettings: View {
         }
     }
 
+    @ViewBuilder
     private func budgetRows(_ snapshot: LedgerSnapshot) -> some View {
+        let targetMonth = activeMonth
         let categories = snapshot.categories
-        let limits = (snapshot.budgets[month] ?? [:]).filter { categories.contains($0.key) }
-        let previousLimits = (snapshot.budgets[month.advanced(by: -1)] ?? [:]).filter { categories.contains($0.key) }
-        let totals = try? Ledger.totals(for: snapshot.expenses, in: month)
-        return Section(month.start.formatted(japaneseDate.year().month())) {
+        let limits = (snapshot.budgets[targetMonth] ?? [:]).filter { categories.contains($0.key) }
+        let previousLimits = (snapshot.budgets[targetMonth.advanced(by: -1)] ?? [:]).filter { categories.contains($0.key) }
+        let totals = try? Ledger.totals(for: snapshot.expenses, in: targetMonth)
+        let unsetCategories = categories.filter { limits[$0] == nil }
+
+        Section {
+            HStack {
+                Menu {
+                    Button("前の月") { selectedMonth = targetMonth.advanced(by: -1) }
+                    Button("次の月") { selectedMonth = targetMonth.advanced(by: 1) }
+                    if targetMonth != month {
+                        Button("最初に表示した月に戻る") { selectedMonth = nil }
+                    }
+                } label: {
+                    Label(targetMonth.start.formatted(japaneseDate.year().month()), systemImage: "chevron.down")
+                        .font(.headline)
+                        .frame(minHeight: 44)
+                }
+                Spacer()
+            }
             if limits.isEmpty, !previousLimits.isEmpty {
                 Button("前月の予算を引き継ぐ") {
-                    do { try ledger.copyPreviousBudget(to: month, in: book) }
+                    do { try ledger.copyPreviousBudget(to: targetMonth, in: book) }
                     catch { copyFailed = true }
                 }
                 .frame(minHeight: 44)
@@ -100,24 +121,51 @@ struct BudgetSettings: View {
             } else {
                 Text("支出の合計を表示できません")
             }
+        }
 
-            ForEach(categories, id: \.self) { category in
-                let limit = limits[category]
-                NavigationLink {
-                    BudgetEditor(ledger: ledger, book: book, month: month, category: category, limit: limit)
-                } label: {
-                    let title = snapshot.title(for: category)
-                    if let limit, let totals {
-                        BudgetProgressRow(
-                            title: title,
-                            progress: Ledger.budgetProgress(limit: limit, spent: totals[category, default: 0])
-                        )
-                    } else {
-                        YenRow(title: title, value: limit?.yen ?? "未設定")
+        if !limits.isEmpty {
+            Section("設定済みの費目") {
+                ForEach(categories.filter { limits[$0] != nil }, id: \.self) { category in
+                    let limit = limits[category]
+                    NavigationLink {
+                        BudgetEditor(ledger: ledger, book: book, month: targetMonth, category: category, limit: limit)
+                    } label: {
+                        let title = snapshot.title(for: category)
+                        if let limit, let totals {
+                            BudgetProgressRow(
+                                title: title,
+                                systemImage: category.systemImage,
+                                progress: Ledger.budgetProgress(limit: limit, spent: totals[category, default: 0])
+                            )
+                        } else {
+                            Label(title, systemImage: category.systemImage)
+                                .frame(minHeight: 44)
+                        }
+                    }
+                    .disabled(snapshot.member == nil || ledger.shareBusy)
+                }
+            }
+        }
+
+        if !unsetCategories.isEmpty {
+            Section {
+                DisclosureGroup("予算を追加する費目（\(unsetCategories.count)）") {
+                    ForEach(unsetCategories, id: \.self) { category in
+                        NavigationLink {
+                            BudgetEditor(ledger: ledger, book: book, month: targetMonth, category: category, limit: nil)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: category.systemImage)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 22)
+                                    .accessibilityHidden(true)
+                                YenRow(title: snapshot.title(for: category), value: "未設定")
+                            }
                             .frame(minHeight: 44)
+                        }
+                        .disabled(snapshot.member == nil || ledger.shareBusy)
                     }
                 }
-                .disabled(snapshot.member == nil || ledger.shareBusy)
             }
         }
     }
@@ -135,34 +183,71 @@ func budgetTone(overspend: Bool, colorScheme: ColorScheme) -> Color {
         : Color(red: 166.0 / 255, green: 27.0 / 255, blue: 41.0 / 255)
 }
 
+extension BudgetProgress {
+    var percentageCaption: String {
+        guard let displayPercentage else { return "割合なし" }
+        if overspend > 0 {
+            return "超過 \((-displayPercentage).formatted(.number.precision(.fractionLength(0))))%"
+        }
+        let used = (percentageUsed ?? 0).rounded()
+        let remaining = spent < 0 ? (100 * Double(self.remaining) / Double(limit)).rounded() : 100 - used
+        return "使用 \(used.formatted(.number.precision(.fractionLength(0))))%（残り \(remaining.formatted(.number.precision(.fractionLength(0))))%）"
+    }
+}
+
 private struct BudgetProgressRow: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dynamicTypeSize) private var typeSize
     let title: String
+    var systemImage: String? = nil
     let progress: BudgetProgress
     private var tone: Color {
         budgetTone(overspend: progress.overspend > 0, colorScheme: colorScheme)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            YenRow(title: title, value: "予算 \(progress.limit.yen)")
-            Text("支払済 \(progress.spent.yen)")
-                .font(.subheadline)
-                .monospacedDigit()
-            Text(progress.overspend > 0 ? "超過 \(progress.overspend.yen)" : "残り \(progress.remaining.yen)")
-                .font(.headline)
-                .monospacedDigit()
-                .foregroundStyle(tone)
-            ProgressView(value: progress.progress)
-                .tint(tone)
-                .accessibilityHidden(true)
-            Text(progress.displayPercentage.map { "残り割合 \($0.formatted(.number.precision(.fractionLength(0))))%" }
-                 ?? "割合なし")
-                .font(.footnote)
-                .monospacedDigit()
-                .foregroundStyle(tone)
+        let rowLayout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(spacing: 8))
+        return VStack(alignment: .leading, spacing: 6) {
+            rowLayout {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .foregroundStyle(tone)
+                        .frame(width: 20)
+                        .accessibilityHidden(true)
+                }
+                Text(title)
+                if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
+                Text("予算 \(progress.limit.yen)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            rowLayout {
+                ProgressView(value: progress.progress)
+                    .tint(tone)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityHidden(true)
+                Text(progress.percentageCaption)
+                    .font(.footnote)
+                    .monospacedDigit()
+                    .foregroundStyle(tone)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            rowLayout {
+                Text(progress.overspend > 0 ? "超過 \(progress.overspend.yen)" : "残り \(progress.remaining.yen)")
+                    .font(.headline)
+                    .monospacedDigit()
+                    .foregroundStyle(tone)
+                if !typeSize.isAccessibilitySize { Spacer(minLength: 8) }
+                Text("支払済 \(progress.spent.yen)")
+                    .font(.subheadline)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
         .frame(minHeight: 44)
         .accessibilityElement(children: .combine)
     }
