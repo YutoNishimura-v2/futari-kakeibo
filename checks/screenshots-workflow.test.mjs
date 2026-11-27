@@ -16,15 +16,16 @@ const steps = workflow
   .map((block) => ({ name: /^name: (.+)$/m.exec(block)?.[1], id: /^ {8}id: (.+)$/m.exec(block)?.[1], text: block }));
 const stepNamed = (name) => steps.find((step) => step.name === name);
 
-test('the simulator status bar uses an ISO 8601 time and a discharging battery at 100 percent', () => {
+test('the simulator status bar uses the override arguments accepted by Xcode 26.6', () => {
   const step = stepNamed('Prepare project and simulator');
   assert.ok(step, 'prepare step exists');
-  const statusBar = step.text.replace(/\\\r?\n\s*/g, ' ').match(/xcrun simctl status_bar[^\r\n]+/)?.[0];
-  assert.ok(statusBar, 'the prepare step overrides the simulator status bar');
-  assert.match(statusBar, /--time\s+"\d{4}-\d{2}-\d{2}T09:41:00Z"/);
-  assert.match(statusBar, /--batteryState\s+discharging\b/);
-  assert.match(statusBar, /--batteryLevel\s+100\b/);
-  assert.doesNotMatch(statusBar, /--batteryState\s+['"]?unplugged\b/);
+  const command = step.text.replace(/\s*\\\r?\n\s*/g, ' ');
+  const args = command.match(/xcrun simctl status_bar\s+\S+\s+override ([^\r\n]+)/)?.[1];
+  assert.equal(args, [
+    '--time "9:41" --dataNetwork wifi',
+    '--wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4',
+    '--batteryState discharging --batteryLevel 100',
+  ].join(' '));
 });
 
 test('every logged step tees its output to tmp/ci-logs and keeps the exit code', () => {
