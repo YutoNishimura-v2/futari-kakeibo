@@ -262,7 +262,7 @@ test('receipt replacement removes superseded photo rows while retaining an expen
 });
 
 test('a joined share with unresolved membership exits the loading notice and can retry the merge', () => {
-  assert.match(cloudMethod('refresh'), /if member\(for: joined\.0, share: shares\[joined\.1\.objectID\]\) != \.second \{\s*joinMergeFailed = true\s*\} else if let edits/);
+  assert.match(cloudMethod('refresh'), /if self\.member\(for: joined\.0, share: shares\[joined\.1\.objectID\]\) != \.second \{\s*joinMergeFailed = true\s*\} else if let edits/);
   assert.match(cloudMethod('updateNotice'), /if joinMergeFailed \{[\s\S]*?再試行してください[\s\S]*?awaitingZone != nil/);
   assert.match(cloudMethod('retry'), /await checkAccount\(\)/);
 });

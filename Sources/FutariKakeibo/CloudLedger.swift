@@ -504,7 +504,7 @@ final class CloudLedger: ObservableObject, BookRepository {
             for (book, row) in candidates {
                 var edits = try latestEdits(in: row, context: context)
                 let share = shares[row.objectID]
-                let bookMember = member(for: book, share: share)
+                let bookMember = self.member(for: book, share: share)
                 let partner = share.flatMap(activePartners)?.first { $0.acceptanceStatus == .accepted }
                 let participantID = share?.currentUserParticipant?.userIdentity.userRecordID
                 let currentUserID = self.currentUserID ?? participantID.flatMap {
@@ -569,7 +569,7 @@ final class CloudLedger: ObservableObject, BookRepository {
                let zone = awaitingZone, let joined = candidates.first(where: {
                 $0.0.isGuest && shares[$0.1.objectID]?.recordID.zoneID == zone
             }) {
-                if member(for: joined.0, share: shares[joined.1.objectID]) != .second {
+                if self.member(for: joined.0, share: shares[joined.1.objectID]) != .second {
                     joinMergeFailed = true
                 } else if let edits = bookEdits[joined.0] {
                     do {
@@ -623,7 +623,7 @@ final class CloudLedger: ObservableObject, BookRepository {
                 if shares[candidate.1.objectID] != nil { return candidate }
                 return try isEmpty(candidate.1, context: context) ? nil : candidate
             }
-            let guest = available.first { $0.0.isGuest && member(for: $0.0, share: shares[$0.1.objectID]) == .second }
+            let guest = available.first { $0.0.isGuest && self.member(for: $0.0, share: shares[$0.1.objectID]) == .second }
             let additional = available.first { titles[$0.0] != nil }
             partnerNotice = nil
             isBookShared = false
@@ -1434,8 +1434,7 @@ final class CloudLedger: ObservableObject, BookRepository {
             if let row = try rows(in: container.viewContext, store: sharedStore).first(where: { row in
                 try container.fetchShares(matching: [row.objectID])[row.objectID]?.recordID.zoneID == zone
             }), let id = row.id {
-                let titled = try isTitled(row, context: container.viewContext)
-                if books.contains(Book(id: id, isGuest: true)) || !titled {
+                if books.contains(Book(id: id, isGuest: true)) || row.title == nil {
                     remember(Book(id: id, isGuest: true))
                 }
                 clearInviteFailure(for: metadata)

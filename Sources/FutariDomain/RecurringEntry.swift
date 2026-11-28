@@ -22,7 +22,7 @@ public enum RecurringEntry {
         var seen = existingIDs
         return try templates.compactMap { template in
             guard Month(containing: template.date).start <= month.start else { return nil }
-            let id = id(bookID: bookID, templateID: template.id, month: month)
+            let id = Self.id(bookID: bookID, templateID: template.id, month: month)
             guard seen.insert(id).inserted else { return nil }
             return try Expense(id: id, amount: template.amount, date: month.start,
                                category: template.category, payer: template.payer,
