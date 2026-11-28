@@ -836,7 +836,6 @@ struct EntryForm: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(original != nil ? "支出を編集" : (isRecurring ? "定期入力を追加" : "支出を記録"))
             .navigationBarTitleDisplayMode(.inline)
-            .defaultFocus($amountFocused, true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("保存", action: save) }
@@ -849,6 +848,9 @@ struct EntryForm: View {
             } message: {
                 Text(failure)
             }
+        }
+        .task {
+            amountFocused = true
         }
     }
 

@@ -542,9 +542,12 @@ test('the paywall explains shared two-person value, all major Pro features and f
 test('the first entry uses a focused amount and two defaulted pickers before optional details', () => {
   const app = source('FutariKakeibo/FutariKakeiboApp.swift');
   assert.match(app, /enteringExpense = try ledger\.startRecording\(\)/);
-  assert.match(app, /category = Category\.groceries/);
-  assert.match(app, /_payer = State\(initialValue: expense\?\.payer \?\? snapshot\.member \?\? \.first\)/);
-  assert.match(app, /TextField\("金額（円）"[\s\S]*?Picker\("支払った人"[\s\S]*?Picker\("費目"[\s\S]*?DisclosureGroup\(isRecurring[\s\S]*?defaultFocus\(\$amountFocused, true\)/);
+  const entry = app.slice(app.indexOf('struct EntryForm'), app.indexOf('struct EditNames'));
+  assert.match(entry, /category = Category\.groceries/);
+  assert.match(entry, /_payer = State\(initialValue: expense\?\.payer \?\? snapshot\.member \?\? \.first\)/);
+  assert.match(entry, /TextField\("金額（円）", text: \$amount\)[\s\S]*?\.focused\(\$amountFocused\)\s+Picker\("支払った人"[\s\S]*?Picker\("費目"[\s\S]*?DisclosureGroup\(isRecurring/);
+  assert.ok(/^        \.task\s*\{\s*amountFocused = true\s*\}\s*\n    \}\s*\n\s*private func save\(/m.test(entry),
+    'the entry sheet explicitly focuses the amount field when it opens');
 });
 
 test('the collapsed entry details show the active split mode', () => {

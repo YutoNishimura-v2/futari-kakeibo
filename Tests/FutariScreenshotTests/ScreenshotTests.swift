@@ -24,9 +24,7 @@ final class ScreenshotTests: XCTestCase {
 
         entry.tap()
         let amount = app.textFields["金額（円）"]
-        XCTAssertTrue(amount.waitForExistence(timeout: 5))
-        let keyboard = app.keyboards.firstMatch
-        XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+        waitForAmountKeyboard(amount, in: app)
         capture("entry", style, in: app)
         app.buttons["閉じる"].tap()
         XCTAssertTrue(amount.waitForNonExistence(timeout: 5))
@@ -55,7 +53,7 @@ final class ScreenshotTests: XCTestCase {
             app.navigationBars["費目別予算"].buttons.firstMatch.tap()
             app.navigationBars["月の明細"].buttons.firstMatch.tap()
             entry.tap()
-            XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+            waitForAmountKeyboard(amount, in: app)
             amount.typeText("1200")
             app.buttons["保存"].tap()
             XCTAssertTrue(entry.waitForExistence(timeout: 5))
@@ -65,6 +63,12 @@ final class ScreenshotTests: XCTestCase {
             XCTAssertTrue(updatedMonth.waitForExistence(timeout: 5))
         }
         app.terminate()
+    }
+
+    @MainActor
+    private func waitForAmountKeyboard(_ amount: XCUIElement, in app: XCUIApplication) {
+        XCTAssertTrue(amount.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
     }
 
     @MainActor

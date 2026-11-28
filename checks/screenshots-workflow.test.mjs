@@ -28,6 +28,15 @@ test('the simulator status bar uses the override arguments accepted by Xcode 26.
   ].join(' '));
 });
 
+test('screenshot tests wait for the amount field and keyboard without tapping the field', () => {
+  const suite = read('Tests/FutariScreenshotTests/ScreenshotTests.swift');
+  const wait = /private func waitForAmountKeyboard\([^\n]+\{([\s\S]*?)\n    \}/.exec(suite)?.[1] ?? '';
+  assert.doesNotMatch(suite, /\bamount\s*\.\s*tap\s*\(/);
+  assert.match(wait, /^\s*XCTAssertTrue\(amount\.waitForExistence\(timeout: 5\)\)\s+XCTAssertTrue\(app\.keyboards\.firstMatch\.waitForExistence\(timeout: 5\)\)\s*$/);
+  assert.match(suite, /entry\.tap\(\)\s+let amount = app\.textFields\[[^\n]+\]\s+waitForAmountKeyboard\(amount, in: app\)\s+capture\("entry", style, in: app\)/);
+  assert.match(suite, /entry\.tap\(\)\s+waitForAmountKeyboard\(amount, in: app\)\s+amount\.typeText\("1200"\)/);
+});
+
 test('every logged step tees its output to tmp/ci-logs and keeps the exit code', () => {
   for (const { id, title } of LOGGED_STEPS) {
     const step = stepNamed(title);
