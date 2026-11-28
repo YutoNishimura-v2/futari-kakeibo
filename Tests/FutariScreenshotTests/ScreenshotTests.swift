@@ -83,11 +83,10 @@ final class ScreenshotTests: XCTestCase {
         waitForTitle("ふたりの家計簿 Pro", in: app)
         XCTAssertTrue(app.staticTexts["Proでできること"].waitForExistence(timeout: 5))
         capture("paywall", style, in: app)
-        let terms = app.descendants(matching: .any).matching(NSPredicate(
-            format: "identifier == %@ AND label CONTAINS %@ AND label CONTAINS %@",
-            "purchase-terms", "年ごとに自動更新", "3,600円"
-        )).firstMatch
+        let terms = element("purchase-terms", in: app)
         try reveal(terms, in: app)
+        XCTAssertTrue(terms.label.contains("年ごとに自動更新"))
+        XCTAssertTrue(terms.label.contains("3,600円"))
         app.terminate()
     }
 

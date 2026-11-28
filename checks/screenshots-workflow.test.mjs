@@ -37,6 +37,24 @@ test('screenshot tests wait for the amount field and keyboard without tapping th
   assert.match(suite, /entry\.tap\(\)\s+waitForAmountKeyboard\(amount, in: app\)\s+amount\.typeText\("1200"\)/);
 });
 
+test('the purchase terms are individually accessible as a row in the paywall list', () => {
+  const paywall = read('Sources/FutariKakeibo/ProPaywall.swift');
+  const termsRow = /Text\(purchaseTerms\)(?:(?!\n\s*}).)*?\.accessibilityIdentifier\("purchase-terms"\)/s;
+  const planRows = /ForEach\(ProProduct\.allCases[\s\S]*?\n                }(?: footer: \{)?/.exec(paywall)?.[0] ?? '';
+  assert.match(planRows, termsRow, 'the terms must be a list row alongside the plan options, inside the section content');
+});
+
+test('both screenshot appearances reveal and check the yearly renewal terms and price', () => {
+  const suite = read('Tests/FutariScreenshotTests/ScreenshotTests.swift');
+  for (const [appearance, testName] of [['dark', 'Dark'], ['light', 'Light']]) {
+    const body = new RegExp('func test' + testName + '\\(\\) throws \\{([^}]+)\\}').exec(suite)?.[1] ?? '';
+    assert.ok(body.includes('try capturePaywall(style: "' + appearance + '")'));
+  }
+  assert.match(suite, /let terms = element\("purchase-terms", in: app\)\s+try reveal\(terms, in: app\)/);
+  assert.match(suite, /XCTAssertTrue\(terms\.label\.contains\("年ごとに自動更新"\)\)/);
+  assert.match(suite, /XCTAssertTrue\(terms\.label\.contains\("3,600円"\)\)/);
+});
+
 test('every logged step tees its output to tmp/ci-logs and keeps the exit code', () => {
   for (const { id, title } of LOGGED_STEPS) {
     const step = stepNamed(title);

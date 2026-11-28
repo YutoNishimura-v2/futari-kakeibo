@@ -52,12 +52,20 @@ struct ProPaywall: View {
                         Button("価格を再読み込み") { Task { await loadProducts() } }
                             .frame(minHeight: 44)
                     }
-                } footer: {
+                    // Keep the terms addressable separately from the savings text in the list.
                     if let yearlySavings {
                         Text("年額は月額12か月分より約\(yearlySavings)%お得")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
                     Text(purchaseTerms)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                         .accessibilityIdentifier("purchase-terms")
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
                 Section {
                     if selection == .yearly && yearlyIntroEligible {
